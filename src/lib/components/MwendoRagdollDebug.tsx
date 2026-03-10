@@ -794,7 +794,7 @@ export function MwendoRagdollDebug({
   });
 
   return (
-    <group>
+    <group userData={{ mwendoIgnoreCameraOcclusion: true }}>
       <DebugBoard
         liveStepCount={snapshot.liveStepCount}
         manualStepCount={manualStepCount}

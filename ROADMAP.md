@@ -2,7 +2,21 @@
 
 ## Guiding principle
 
-Keep gameplay control deterministic and debuggable first, then layer animation sophistication on top. That makes interactions like aiming, opening doors, entering vehicles, and golfing easier to ship without letting the animation system own all gameplay logic.
+Keep gameplay control deterministic and debuggable first, then layer richer animation and interaction systems on top. The library should stay usable for actual game logic even before it grows into a more advanced animation stack.
+
+## Current status
+
+The repo now has a production-ready baseline for packaging and integration:
+
+- scoped store and library exports
+- keyboard and external-input controller paths
+- explicit movement states: `idle`, `walk`, `run`, `crouch`, `jump`, `fall`
+- snapshot and lifecycle callbacks
+- follow camera with occlusion handling
+- humanoid ragdoll dummy plus in-world debug tooling
+- demo and library builds from the same source tree
+
+That baseline is strong enough for package publication and downstream experimentation, but it is not the final gameplay feature set yet.
 
 ## Milestone 0: Playground baseline
 
@@ -11,7 +25,7 @@ Status: complete
 - Flatspace traversal scene
 - Third-person chase camera
 - Physics-backed player capsule
-- Ragdoll target for impact and future recovery tests
+- Separate ragdoll target for sandbox testing
 
 Exit criteria:
 
@@ -21,28 +35,56 @@ Exit criteria:
 
 ## Milestone 1: Character controller quality
 
-- Add acceleration curves, deceleration, slope handling, step-up logic, and camera collision avoidance
-- Improve grounded detection and add jump, landing, and fall states
-- Add aim-space rotation rules so locomotion and facing can diverge cleanly
+Status: mostly complete
+
+Completed:
+
+- acceleration and deceleration tuning
+- explicit grounded detection
+- `jump` and `fall` states
+- external input adapter support
+- follow camera occlusion handling
+- state snapshots and movement callbacks
+
+Remaining:
+
+- slope-specialized handling
+- step-up behavior for ledges and stairs
+- camera collision polish against tighter indoor geometry
+- optional aim-space rotation rules for strafing or shooting modes
 
 Exit criteria:
 
 - Controller feels stable at 60+ FPS under camera rotation and collision pressure
 - Movement state is explicit and testable from input plus physics
+- Camera can stay readable in typical gameplay spaces without clipping through level art
 
-## Milestone 2: Locomotion animation graph
+## Milestone 2: Locomotion puppet and active physics
 
-- Expand the primitive biped into a more complete locomotion puppet with walk, run, crouch, idle, turn, stop, and start coverage
-- Add active-ragdoll or hybrid targets so the primitive body can stay physically meaningful while still reading clearly in motion
-- Add foot IK, stride warping, slope adaptation, and root-motion policy decisions
+Status: in progress
+
+Completed:
+
+- primitive humanoid player puppet
+- full humanoid ragdoll dummy
+- in-world debug overlays for colliders, joints, contacts, COM, trails, and velocities
+
+Next implementation targets:
+
+- active-ragdoll or hybrid targets for the player
+- landing and recovery pose shaping
+- foot placement and slope adaptation
+- optional skinned-shell attachment without changing controller code
 
 Exit criteria:
 
-- No obvious foot sliding on flat ground
-- Walk, run, crouch, stop, and turn transitions are responsive and readable
-- The physics proportions and visual proportions stay aligned well enough that a later skinned shell remains optional, not required
+- Player body reads clearly in motion and under impacts
+- The physics proportions and visual proportions stay aligned
+- Ragdoll handoff and recovery are stable enough for gameplay testing
 
 ## Milestone 3: Upper-body and combat layering
+
+Status: not started
 
 - Add aim offsets, additive recoil, and upper-body masking
 - Separate locomotion state from action state so moving and shooting can coexist
@@ -51,9 +93,11 @@ Exit criteria:
 Exit criteria:
 
 - Shooting does not break locomotion balance
-- Upper-body overlays can be swapped without rewriting the locomotion graph
+- Upper-body overlays can be swapped without rewriting locomotion code
 
 ## Milestone 4: Context interactions
+
+Status: not started
 
 - Add interaction anchors for doors, seats, golf clubs, balls, and pickup points
 - Implement approach, align, enter, use, and exit states for each interaction family
@@ -62,9 +106,11 @@ Exit criteria:
 Exit criteria:
 
 - Car door and seat interactions can be entered from more than one approach angle
-- Golf setup and swing can be driven by a controlled state instead of a cutscene-style lock
+- Golf setup and swing can be driven by a controlled state instead of a cutscene lock
 
 ## Milestone 5: Physics blending and recovery
+
+Status: not started
 
 - Add hit reactions and partial ragdoll blending
 - Support full ragdoll fallback with recovery get-up logic
@@ -77,6 +123,8 @@ Exit criteria:
 
 ## Milestone 6: Data-driven upgrade path
 
+Status: research only
+
 - Evaluate motion matching once the clip library is large enough
 - Evaluate DeepPhase or Local Motion Phases when interactions and sports actions become too numerous for manual graph maintenance
 - Keep feature extraction, query generation, and interaction metadata independent from render code
@@ -84,3 +132,9 @@ Exit criteria:
 Exit criteria:
 
 - Replacing the locomotion backend does not require rewriting controller, camera, or interaction code
+
+## What I would implement next
+
+1. Player ragdoll handoff and get-up recovery.
+2. A first interaction contract for `use/open` targets such as doors and seats.
+3. Aiming and upper-body overlays so shooting can coexist with locomotion.

@@ -1,4 +1,10 @@
-export type MwendoMovementMode = "idle" | "walk" | "run" | "crouch";
+export type MwendoMovementMode =
+  | "idle"
+  | "walk"
+  | "run"
+  | "crouch"
+  | "jump"
+  | "fall";
 
 export type MwendoVec3 = [number, number, number];
 
@@ -9,6 +15,15 @@ export type MwendoInputState = {
   right: boolean;
   run: boolean;
   crouch: boolean;
+  jump: boolean;
+};
+
+export type MwendoPlayerSnapshot = {
+  position: MwendoVec3;
+  facing: number;
+  movementMode: MwendoMovementMode;
+  grounded: boolean;
+  velocity: MwendoVec3;
 };
 
 export const DEFAULT_MWENDO_INPUT: MwendoInputState = {
@@ -18,4 +33,22 @@ export const DEFAULT_MWENDO_INPUT: MwendoInputState = {
   right: false,
   run: false,
   crouch: false,
+  jump: false,
 };
+
+export function mergeMwendoInput(
+  ...inputs: Array<Partial<MwendoInputState> | null | undefined>
+): MwendoInputState {
+  return inputs.reduce<MwendoInputState>(
+    (accumulator, input) => ({
+      forward: accumulator.forward || Boolean(input?.forward),
+      backward: accumulator.backward || Boolean(input?.backward),
+      left: accumulator.left || Boolean(input?.left),
+      right: accumulator.right || Boolean(input?.right),
+      run: accumulator.run || Boolean(input?.run),
+      crouch: accumulator.crouch || Boolean(input?.crouch),
+      jump: accumulator.jump || Boolean(input?.jump),
+    }),
+    { ...DEFAULT_MWENDO_INPUT },
+  );
+}

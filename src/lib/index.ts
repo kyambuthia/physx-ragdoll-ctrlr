@@ -4,6 +4,7 @@ export {
   useMwendoStore,
   useMwendoStoreApi,
 } from "./MwendoProvider";
+export { useMwendoInputController } from "./useMwendoInputController";
 export { useMwendoKeyboardInput } from "./useMwendoKeyboardInput";
 export { MwendoPlayer } from "./components/MwendoPlayer";
 export { MwendoCameraRig } from "./components/MwendoCameraRig";
@@ -16,6 +17,7 @@ export type {
 export type {
   MwendoInputState,
   MwendoMovementMode,
+  MwendoPlayerSnapshot,
   MwendoVec3,
 } from "./types";
-export { DEFAULT_MWENDO_INPUT } from "./types";
+export { DEFAULT_MWENDO_INPUT, mergeMwendoInput } from "./types";

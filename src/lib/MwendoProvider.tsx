@@ -6,26 +6,34 @@ import {
 } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { MwendoMovementMode, MwendoVec3 } from "./types";
+import type {
+  MwendoMovementMode,
+  MwendoPlayerSnapshot,
+  MwendoVec3,
+} from "./types";
 
 export type MwendoControllerState = {
   playerPosition: MwendoVec3;
+  playerVelocity: MwendoVec3;
   playerFacing: number;
   movementMode: MwendoMovementMode;
+  grounded: boolean;
   cameraYaw: number;
   cameraPitch: number;
-  setPlayerSnapshot: (payload: {
-    position: MwendoVec3;
-    facing: number;
-    movementMode: MwendoMovementMode;
-  }) => void;
+  setPlayerSnapshot: (payload: MwendoPlayerSnapshot) => void;
   adjustCamera: (yawDelta: number, pitchDelta: number) => void;
 };
 
 export type MwendoStoreInit = Partial<
   Pick<
     MwendoControllerState,
-    "playerPosition" | "playerFacing" | "movementMode" | "cameraYaw" | "cameraPitch"
+    | "playerPosition"
+    | "playerVelocity"
+    | "playerFacing"
+    | "movementMode"
+    | "grounded"
+    | "cameraYaw"
+    | "cameraPitch"
   >
 >;
 
@@ -36,8 +44,10 @@ const defaultState: Omit<
   "setPlayerSnapshot" | "adjustCamera"
 > = {
   playerPosition: [0, 2.5, 6],
+  playerVelocity: [0, 0, 0],
   playerFacing: 0,
   movementMode: "idle",
+  grounded: false,
   cameraYaw: Math.PI,
   cameraPitch: -0.22,
 };
@@ -48,11 +58,13 @@ export function createMwendoStore(
   return createStore<MwendoControllerState>()((set) => ({
     ...defaultState,
     ...initialState,
-    setPlayerSnapshot: ({ position, facing, movementMode }) =>
+    setPlayerSnapshot: ({ position, velocity, facing, movementMode, grounded }) =>
       set({
         playerPosition: position,
+        playerVelocity: velocity,
         playerFacing: facing,
         movementMode,
+        grounded,
       }),
     adjustCamera: (yawDelta, pitchDelta) =>
       set((state) => ({

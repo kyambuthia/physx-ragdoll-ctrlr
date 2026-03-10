@@ -64,7 +64,11 @@ export function PrimitiveHero(props: {
   void props.movementMode;
 
   return (
-    <group ref={props.rig.rootRef} position={[0, 0.02, 0]}>
+    <group
+      ref={props.rig.rootRef}
+      position={[0, 0.02, 0]}
+      userData={{ mwendoIgnoreCameraOcclusion: true }}
+    >
       <group ref={props.rig.pelvisRef} position={[0, 0.9, 0]}>
         <group ref={props.rig.spineRef} position={[0, 0.02, 0]}>
           <BlockPart

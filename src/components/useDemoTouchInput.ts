@@ -18,6 +18,7 @@ function makeInputFromDelta(dx: number, dy: number): MwendoInputState {
     right: dx > MOVE_DEAD_ZONE,
     run: magnitude > RUN_THRESHOLD,
     crouch: false,
+    jump: false,
   };
 }
 

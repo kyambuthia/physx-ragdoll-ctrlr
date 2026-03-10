@@ -1,4 +1,10 @@
-import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
+import {
+  CapsuleCollider,
+  RigidBody,
+  type CollisionEnterPayload,
+  type CollisionExitPayload,
+  type RapierRigidBody,
+} from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import {
   type RefObject,
@@ -12,8 +18,10 @@ import { useMwendoStore, useMwendoStoreApi } from "../MwendoProvider";
 import { useMwendoKeyboardInput } from "../useMwendoKeyboardInput";
 import {
   DEFAULT_MWENDO_INPUT,
+  mergeMwendoInput,
   type MwendoInputState,
   type MwendoMovementMode,
+  type MwendoPlayerSnapshot,
   type MwendoVec3,
 } from "../types";
 
@@ -25,11 +33,27 @@ const MAX_SPEED = 7;
 export type MwendoPlayerProps = {
   position?: MwendoVec3;
   controls?: "keyboard" | "none";
+  input?: Partial<MwendoInputState>;
   inputRef?: RefObject<MwendoInputState | null>;
   linearDamping?: number;
   capsuleHalfHeight?: number;
   capsuleRadius?: number;
+  walkSpeed?: number;
+  runSpeed?: number;
+  crouchSpeed?: number;
+  jumpVelocity?: number;
+  acceleration?: number;
+  deceleration?: number;
+  airControl?: number;
   debug?: boolean;
+  onSnapshotChange?: (snapshot: MwendoPlayerSnapshot) => void;
+  onMovementModeChange?: (
+    movementMode: MwendoMovementMode,
+    previousMovementMode: MwendoMovementMode,
+  ) => void;
+  onGroundedChange?: (grounded: boolean) => void;
+  onJump?: (snapshot: MwendoPlayerSnapshot) => void;
+  onLand?: (snapshot: MwendoPlayerSnapshot) => void;
 };
 
 function dampAxis(
@@ -56,11 +80,24 @@ function dampAxis(
 export function MwendoPlayer({
   position = [0, 2.5, 6],
   controls = "keyboard",
+  input,
   inputRef,
   linearDamping = 8,
   capsuleHalfHeight = 0.52,
   capsuleRadius = 0.34,
+  walkSpeed = 4,
+  runSpeed = MAX_SPEED,
+  crouchSpeed = 2,
+  jumpVelocity = 5.6,
+  acceleration = 10,
+  deceleration = 14,
+  airControl = 0.38,
   debug = false,
+  onSnapshotChange,
+  onMovementModeChange,
+  onGroundedChange,
+  onJump,
+  onLand,
 }: MwendoPlayerProps) {
   const storeApi = useMwendoStoreApi();
   const setPlayerSnapshot = useMwendoStore((state) => state.setPlayerSnapshot);
@@ -83,21 +120,63 @@ export function MwendoPlayer({
   const debugStateRef = useRef<{
     facing: number;
     movementMode: MwendoMovementMode;
+    grounded: boolean;
   } | null>({
     facing: 0,
     movementMode: "idle",
+    grounded: false,
   });
+  const supportColliderHandlesRef = useRef<Set<number>>(new Set());
+  const groundedRef = useRef(false);
+  const movementModeRef = useRef<MwendoMovementMode>("idle");
+  const jumpHeldRef = useRef(false);
+  const lastSnapshotRef = useRef<MwendoPlayerSnapshot | null>(null);
   const idleInputRef = useRef<MwendoInputState | null>({ ...DEFAULT_MWENDO_INPUT });
   const keyboardInputRef = useMwendoKeyboardInput(controls === "keyboard");
   const initialPositionRef = useRef(position);
 
+  const updateGrounded = (nextGrounded: boolean) => {
+    if (groundedRef.current === nextGrounded) {
+      return;
+    }
+
+    groundedRef.current = nextGrounded;
+    onGroundedChange?.(nextGrounded);
+  };
+
+  const handleGroundContactEnter = (payload: CollisionEnterPayload) => {
+    const normal = payload.manifold.normal();
+    const supportY = payload.flipped ? normal.y : -normal.y;
+
+    if (supportY < 0.35) {
+      return;
+    }
+
+    supportColliderHandlesRef.current.add(payload.other.collider.handle);
+    updateGrounded(true);
+  };
+
+  const handleGroundContactExit = (payload: CollisionExitPayload) => {
+    supportColliderHandlesRef.current.delete(payload.other.collider.handle);
+
+    if (supportColliderHandlesRef.current.size === 0) {
+      updateGrounded(false);
+    }
+  };
+
   useEffect(() => {
-    setPlayerSnapshot({
+    const initialSnapshot: MwendoPlayerSnapshot = {
       position: initialPositionRef.current,
       facing: storeApi.getState().playerFacing,
       movementMode: "idle",
-    });
-  }, [setPlayerSnapshot, storeApi]);
+      grounded: false,
+      velocity: [0, 0, 0],
+    };
+
+    setPlayerSnapshot(initialSnapshot);
+    lastSnapshotRef.current = initialSnapshot;
+    onSnapshotChange?.(initialSnapshot);
+  }, [onSnapshotChange, setPlayerSnapshot, storeApi]);
 
   useFrame((_, delta) => {
     const body = bodyRef.current;
@@ -108,19 +187,11 @@ export function MwendoPlayer({
       return;
     }
 
-    const externalInput = inputRef?.current ?? DEFAULT_MWENDO_INPUT;
     const internalInput =
       controls === "keyboard"
         ? keyboardInputRef.current ?? DEFAULT_MWENDO_INPUT
         : idleInputRef.current ?? DEFAULT_MWENDO_INPUT;
-    const keys: MwendoInputState = {
-      forward: externalInput.forward || internalInput.forward,
-      backward: externalInput.backward || internalInput.backward,
-      left: externalInput.left || internalInput.left,
-      right: externalInput.right || internalInput.right,
-      run: externalInput.run || internalInput.run,
-      crouch: externalInput.crouch || internalInput.crouch,
-    };
+    const keys = mergeMwendoInput(input, inputRef?.current, internalInput);
     const { cameraYaw, playerFacing } = storeApi.getState();
 
     forward.set(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
@@ -137,7 +208,7 @@ export function MwendoPlayer({
       movement.normalize();
     }
 
-    const nextMovementMode: MwendoMovementMode = keys.crouch
+    const locomotionMode: MwendoMovementMode = keys.crouch
       ? "crouch"
       : hasMovementInput && keys.run
         ? "run"
@@ -146,20 +217,51 @@ export function MwendoPlayer({
           : "idle";
 
     const speed =
-      nextMovementMode === "run"
-        ? MAX_SPEED
-        : nextMovementMode === "walk"
-          ? 4
-          : nextMovementMode === "crouch"
-            ? 2
+      locomotionMode === "run"
+        ? runSpeed
+        : locomotionMode === "walk"
+          ? walkSpeed
+          : locomotionMode === "crouch"
+            ? crouchSpeed
             : 0;
 
     const currentVelocity = body.linvel();
+    const grounded = groundedRef.current;
+    const horizontalLambda = grounded
+      ? hasMovementInput
+        ? acceleration
+        : deceleration
+      : (hasMovementInput ? acceleration : deceleration) * airControl;
+    const nextVelocityX = MathUtils.damp(
+      currentVelocity.x,
+      movement.x * speed,
+      horizontalLambda,
+      delta,
+    );
+    const nextVelocityZ = MathUtils.damp(
+      currentVelocity.z,
+      movement.z * speed,
+      horizontalLambda,
+      delta,
+    );
+
+    const jumpPressed = keys.jump;
+    const jumpTriggered = grounded && jumpPressed && !jumpHeldRef.current;
+    jumpHeldRef.current = jumpPressed;
+
+    let nextVelocityY = currentVelocity.y;
+
+    if (jumpTriggered) {
+      nextVelocityY = jumpVelocity;
+      supportColliderHandlesRef.current.clear();
+      updateGrounded(false);
+    }
+
     body.setLinvel(
       {
-        x: movement.x * speed,
-        y: currentVelocity.y,
-        z: movement.z * speed,
+        x: nextVelocityX,
+        y: nextVelocityY,
+        z: nextVelocityZ,
       },
       true,
     );
@@ -168,12 +270,24 @@ export function MwendoPlayer({
     const facing = hasMovementInput
       ? Math.atan2(movement.x, movement.z)
       : playerFacing;
-    const speedRatio = speed / MAX_SPEED;
-    const crouchAmount = nextMovementMode === "crouch" ? 1 : 0;
+    const groundedAfterMove = groundedRef.current;
+    const nextMovementMode: MwendoMovementMode = groundedAfterMove
+      ? locomotionMode
+      : nextVelocityY > 0.35
+        ? "jump"
+        : "fall";
+    const speedRatio = Math.min(
+      1,
+      Math.hypot(nextVelocityX, nextVelocityZ) / runSpeed,
+    );
+    const crouchAmount = locomotionMode === "crouch" ? 1 : 0;
+    const airborneAmount = groundedAfterMove ? 0 : 1;
+    const airArmLift = airborneAmount * 0.18;
+    const airLegTuck = airborneAmount * 0.34;
 
     visual.rotation.y = MathUtils.damp(visual.rotation.y, facing, 10, delta);
 
-    gaitPhaseRef.current += delta * MathUtils.lerp(1.8, 8.8, speedRatio);
+    gaitPhaseRef.current += delta * MathUtils.lerp(1.2, 8.8, speedRatio);
     const stride = Math.sin(gaitPhaseRef.current);
     const mirroredStride = Math.sin(gaitPhaseRef.current + Math.PI);
     const bounce = Math.sin(gaitPhaseRef.current * 2) * 0.04 * speedRatio;
@@ -201,7 +315,12 @@ export function MwendoPlayer({
       delta,
     );
 
-    dampAxis(spineRef, "x", -0.04 + crouchAmount * 0.34 - speedRatio * 0.02, delta);
+    dampAxis(
+      spineRef,
+      "x",
+      -0.04 + crouchAmount * 0.34 - speedRatio * 0.02 - airborneAmount * 0.12,
+      delta,
+    );
     dampAxis(spineRef, "y", torsoTwist, delta);
     dampAxis(
       spineRef,
@@ -209,51 +328,96 @@ export function MwendoPlayer({
       Math.sin(gaitPhaseRef.current * 2) * 0.04 * speedRatio,
       delta,
     );
-    dampAxis(headRef, "x", 0.08 - crouchAmount * 0.18 - idleBreath * 1.4, delta);
+    dampAxis(
+      headRef,
+      "x",
+      0.08 - crouchAmount * 0.18 - idleBreath * 1.4 + airborneAmount * 0.06,
+      delta,
+    );
     dampAxis(headRef, "y", -torsoTwist * 0.45, delta);
 
-    dampAxis(leftUpperArmRef, "x", mirroredStride * armSwing - crouchAmount * 0.16, delta);
-    dampAxis(rightUpperArmRef, "x", stride * armSwing - crouchAmount * 0.16, delta);
+    dampAxis(
+      leftUpperArmRef,
+      "x",
+      mirroredStride * armSwing - crouchAmount * 0.16 - airArmLift,
+      delta,
+    );
+    dampAxis(
+      rightUpperArmRef,
+      "x",
+      stride * armSwing - crouchAmount * 0.16 - airArmLift,
+      delta,
+    );
     dampAxis(leftUpperArmRef, "z", -0.08 + crouchAmount * 0.1, delta);
     dampAxis(rightUpperArmRef, "z", 0.08 - crouchAmount * 0.1, delta);
     dampAxis(
       leftLowerArmRef,
       "x",
-      Math.max(0, -mirroredStride) * 0.46 * speedRatio + crouchAmount * 0.22,
+      Math.max(0, -mirroredStride) * 0.46 * speedRatio + crouchAmount * 0.22 + airArmLift * 0.7,
       delta,
     );
     dampAxis(
       rightLowerArmRef,
       "x",
-      Math.max(0, -stride) * 0.46 * speedRatio + crouchAmount * 0.22,
+      Math.max(0, -stride) * 0.46 * speedRatio + crouchAmount * 0.22 + airArmLift * 0.7,
       delta,
     );
 
-    dampAxis(leftUpperLegRef, "x", stride * legSwing - crouchAmount * 0.48, delta);
-    dampAxis(rightUpperLegRef, "x", mirroredStride * legSwing - crouchAmount * 0.48, delta);
+    dampAxis(
+      leftUpperLegRef,
+      "x",
+      stride * legSwing - crouchAmount * 0.48 - airLegTuck,
+      delta,
+    );
+    dampAxis(
+      rightUpperLegRef,
+      "x",
+      mirroredStride * legSwing - crouchAmount * 0.48 - airLegTuck,
+      delta,
+    );
     dampAxis(leftUpperLegRef, "z", -0.04 * speedRatio, delta);
     dampAxis(rightUpperLegRef, "z", 0.04 * speedRatio, delta);
     dampAxis(
       leftLowerLegRef,
       "x",
-      Math.max(0, -stride) * 0.8 * speedRatio + crouchAmount * 0.72,
+      Math.max(0, -stride) * 0.8 * speedRatio + crouchAmount * 0.72 + airLegTuck * 1.4,
       delta,
     );
     dampAxis(
       rightLowerLegRef,
       "x",
-      Math.max(0, -mirroredStride) * 0.8 * speedRatio + crouchAmount * 0.72,
+      Math.max(0, -mirroredStride) * 0.8 * speedRatio + crouchAmount * 0.72 + airLegTuck * 1.4,
       delta,
     );
 
-    setPlayerSnapshot({
+    if (movementModeRef.current !== nextMovementMode) {
+      const previousMovementMode = movementModeRef.current;
+      movementModeRef.current = nextMovementMode;
+      onMovementModeChange?.(nextMovementMode, previousMovementMode);
+    }
+
+    const snapshot: MwendoPlayerSnapshot = {
       position: [bodyPosition.x, bodyPosition.y, bodyPosition.z],
+      velocity: [nextVelocityX, nextVelocityY, nextVelocityZ],
       facing,
       movementMode: nextMovementMode,
-    });
+      grounded: groundedAfterMove,
+    };
+    const previousSnapshot = lastSnapshotRef.current;
+
+    setPlayerSnapshot(snapshot);
+    onSnapshotChange?.(snapshot);
+    if (jumpTriggered) {
+      onJump?.(snapshot);
+    }
+    if (previousSnapshot && !previousSnapshot.grounded && groundedAfterMove) {
+      onLand?.(snapshot);
+    }
+    lastSnapshotRef.current = snapshot;
     debugStateRef.current = {
       facing,
       movementMode: nextMovementMode,
+      grounded: groundedAfterMove,
     };
   });
 
@@ -289,7 +453,11 @@ export function MwendoPlayer({
         linearDamping={linearDamping}
         position={position}
       >
-        <CapsuleCollider args={[capsuleHalfHeight, capsuleRadius]} />
+        <CapsuleCollider
+          args={[capsuleHalfHeight, capsuleRadius]}
+          onCollisionEnter={handleGroundContactEnter}
+          onCollisionExit={handleGroundContactExit}
+        />
         <PrimitiveHero
           movementMode={movementMode}
           rig={{

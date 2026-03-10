@@ -22,6 +22,7 @@ type JointRefMap = {
 type PlayerDebugStateRef = RefObject<{
   facing: number;
   movementMode: MwendoMovementMode;
+  grounded: boolean;
 } | null>;
 
 type JointSnapshot = {
@@ -34,6 +35,7 @@ type PlayerDebugSnapshot = {
   velocityEnd: MwendoVec3;
   facingEnd: MwendoVec3;
   movementMode: MwendoMovementMode;
+  grounded: boolean;
   joints: JointSnapshot[];
 };
 
@@ -137,6 +139,7 @@ export function MwendoPlayerDebug({
         velocityEnd,
         facingEnd,
         movementMode: debugState.movementMode,
+        grounded: debugState.grounded,
         joints: jointEntries,
       });
     });
@@ -159,7 +162,7 @@ export function MwendoPlayerDebug({
   ];
 
   return (
-    <group>
+    <group userData={{ mwendoIgnoreCameraOcclusion: true }}>
       <mesh position={capsulePosition} renderOrder={12}>
         <capsuleGeometry args={[capsuleRadius, capsuleHalfHeight * 2, 8, 16]} />
         <meshBasicMaterial
@@ -261,6 +264,15 @@ export function MwendoPlayerDebug({
             position={[0, -0.08, 0]}
           >
             {snapshot.movementMode}
+          </Text>
+          <Text
+            anchorX="center"
+            anchorY="middle"
+            color={snapshot.grounded ? "#9af4d1" : "#ffb790"}
+            fontSize={0.08}
+            position={[0, -0.26, 0]}
+          >
+            {snapshot.grounded ? "grounded" : "airborne"}
           </Text>
         </group>
       </Billboard>

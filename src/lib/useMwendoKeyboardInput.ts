@@ -18,7 +18,25 @@ const keyMap: Record<string, keyof MwendoInputState> = {
   ControlLeft: "crouch",
   ControlRight: "crouch",
   KeyC: "crouch",
+  Space: "jump",
 };
+
+function isEditableTarget(target: EventTarget | null) {
+  const element = target as HTMLElement | null;
+
+  if (!element) {
+    return false;
+  }
+
+  const tagName = element.tagName;
+
+  return (
+    element.isContentEditable ||
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT"
+  );
+}
 
 export function useMwendoKeyboardInput(enabled = true) {
   const stateRef = useRef<MwendoInputState>({ ...DEFAULT_MWENDO_INPUT });
@@ -32,10 +50,11 @@ export function useMwendoKeyboardInput(enabled = true) {
     const handleKey = (pressed: boolean) => (event: KeyboardEvent) => {
       const mapped = keyMap[event.code];
 
-      if (!mapped) {
+      if (!mapped || isEditableTarget(event.target)) {
         return;
       }
 
+      event.preventDefault();
       stateRef.current[mapped] = pressed;
     };
 

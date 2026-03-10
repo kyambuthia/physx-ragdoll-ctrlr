@@ -1,10 +1,13 @@
 {
   "name": "mwendo",
   "version": "0.1.0",
+  "description": "A React Three Fiber third-person controller library with a primitive player, follow camera, and ragdoll debugging sandbox.",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,17 +15,40 @@
       "require": "./dist/index.cjs"
     }
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kyambuthia/mwendo.git"
+  },
+  "homepage": "https://github.com/kyambuthia/mwendo#readme",
+  "bugs": {
+    "url": "https://github.com/kyambuthia/mwendo/issues"
+  },
+  "keywords": [
+    "react-three-fiber",
+    "threejs",
+    "character-controller",
+    "ragdoll",
+    "game-dev",
+    "physics"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --host 0.0.0.0 --port 4173",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build:lib": "tsup src/lib/index.ts --format esm,cjs --dts --external react,react-dom,three,@react-three/fiber,@react-three/rapier,@react-three/drei,zustand",
+    "build:lib": "tsup src/lib/index.ts --clean --format esm,cjs --dts --external react,react-dom,three,@react-three/fiber,@react-three/rapier,@react-three/drei,zustand",
     "build:demo": "vite build",
-    "build": "npm run typecheck && npm run build:lib && npm run build:demo",
-    "prepublishOnly": "npm run build:lib",
+    "build": "npm run typecheck && npm run test && npm run build:lib && npm run build:demo",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build:lib",
     "preview": "vite preview",
     "preview:lan": "vite preview --host 0.0.0.0 --port 4173"
   },
@@ -49,6 +75,7 @@
     "three": "^0.181.1",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
   }
 }
