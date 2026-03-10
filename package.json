@@ -17,12 +17,14 @@
   ],
   "scripts": {
     "dev": "vite",
+    "dev:lan": "vite --host 0.0.0.0 --port 4173",
     "typecheck": "tsc --noEmit",
     "build:lib": "tsup src/lib/index.ts --format esm,cjs --dts --external react,react-dom,three,@react-three/fiber,@react-three/rapier,@react-three/drei,zustand",
     "build:demo": "vite build",
     "build": "npm run typecheck && npm run build:lib && npm run build:demo",
     "prepublishOnly": "npm run build:lib",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:lan": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "zustand": "^5.0.8"
