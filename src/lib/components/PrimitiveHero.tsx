@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { Group } from "three";
-import type { MovementMode } from "../store/useGameStore";
+import type { MwendoMovementMode } from "../types";
 
 type PrimitiveHeroRig = {
   rootRef: RefObject<Group | null>;
@@ -17,7 +17,7 @@ type PrimitiveHeroRig = {
   rightLowerLegRef: RefObject<Group | null>;
 };
 
-const BODY_COLORS: Record<MovementMode, string> = {
+const BODY_COLORS: Record<MwendoMovementMode, string> = {
   idle: "#314158",
   walk: "#2d6cdf",
   run: "#f97316",
@@ -34,11 +34,7 @@ function TubeSegment(props: {
   metalness?: number;
 }) {
   return (
-    <mesh
-      castShadow
-      position={props.position}
-      rotation={props.rotation}
-    >
+    <mesh castShadow position={props.position} rotation={props.rotation}>
       <capsuleGeometry args={[props.radius, props.length, 10, 18]} />
       <meshStandardMaterial
         color={props.color}
@@ -69,7 +65,7 @@ function JointSphere(props: {
 }
 
 export function PrimitiveHero(props: {
-  movementMode: MovementMode;
+  movementMode: MwendoMovementMode;
   rig: PrimitiveHeroRig;
 }) {
   const bodyColor = BODY_COLORS[props.movementMode];
@@ -105,8 +101,18 @@ export function PrimitiveHero(props: {
             rotation={[0, 0, Math.PI / 2]}
             roughness={0.46}
           />
-          <JointSphere color="#fde68a" radius={0.07} position={[-0.17, 0.36, 0.22]} roughness={0.4} />
-          <JointSphere color="#f4f7fb" radius={0.04} position={[0.17, 0.28, 0.22]} roughness={0.3} />
+          <JointSphere
+            color="#fde68a"
+            radius={0.07}
+            position={[-0.17, 0.36, 0.22]}
+            roughness={0.4}
+          />
+          <JointSphere
+            color="#f4f7fb"
+            radius={0.04}
+            position={[0.17, 0.28, 0.22]}
+            roughness={0.3}
+          />
 
           <group ref={props.rig.headRef} position={[0, 1.15, 0.04]}>
             <TubeSegment

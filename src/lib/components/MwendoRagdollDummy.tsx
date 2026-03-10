@@ -5,9 +5,10 @@ import {
   type RapierRigidBody,
 } from "@react-three/rapier";
 import { useRef } from "react";
+import type { MwendoVec3 } from "../types";
 
-type RagdollDummyProps = {
-  position?: [number, number, number];
+export type MwendoRagdollDummyProps = {
+  position?: MwendoVec3;
 };
 
 function LimbBox(props: { color: string; scale: [number, number, number] }) {
@@ -19,7 +20,9 @@ function LimbBox(props: { color: string; scale: [number, number, number] }) {
   );
 }
 
-export function RagdollDummy({ position = [0, 4.5, 0] }: RagdollDummyProps) {
+export function MwendoRagdollDummy({
+  position = [0, 4.5, 0],
+}: MwendoRagdollDummyProps) {
   const torso = useRef<RapierRigidBody>(null!);
   const head = useRef<RapierRigidBody>(null!);
   const upperArmLeft = useRef<RapierRigidBody>(null!);

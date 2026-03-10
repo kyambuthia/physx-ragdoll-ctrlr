@@ -1,18 +1,37 @@
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useRef,
+} from "react";
 import { Group, MathUtils, Vector3 } from "three";
 import { PrimitiveHero } from "./PrimitiveHero";
-import { usePlayerInput } from "../systems/usePlayerInput";
-import { type MovementMode, useGameStore } from "../store/useGameStore";
+import { useMwendoStore, useMwendoStoreApi } from "../MwendoProvider";
+import { useMwendoKeyboardInput } from "../useMwendoKeyboardInput";
+import {
+  DEFAULT_MWENDO_INPUT,
+  type MwendoInputState,
+  type MwendoMovementMode,
+  type MwendoVec3,
+} from "../types";
 
 const forward = new Vector3();
 const right = new Vector3();
 const movement = new Vector3();
 const MAX_SPEED = 7;
 
+export type MwendoPlayerProps = {
+  position?: MwendoVec3;
+  controls?: "keyboard" | "none";
+  inputRef?: RefObject<MwendoInputState | null>;
+  linearDamping?: number;
+  capsuleHalfHeight?: number;
+  capsuleRadius?: number;
+};
+
 function dampAxis(
-  ref: React.RefObject<Group | null>,
+  ref: RefObject<Group | null>,
   axis: "x" | "y" | "z",
   target: number,
   delta: number,
@@ -24,10 +43,26 @@ function dampAxis(
     return;
   }
 
-  object.rotation[axis] = MathUtils.damp(object.rotation[axis], target, lambda, delta);
+  object.rotation[axis] = MathUtils.damp(
+    object.rotation[axis],
+    target,
+    lambda,
+    delta,
+  );
 }
 
-export function PlayerController() {
+export function MwendoPlayer({
+  position = [0, 2.5, 6],
+  controls = "keyboard",
+  inputRef,
+  linearDamping = 8,
+  capsuleHalfHeight = 0.52,
+  capsuleRadius = 0.34,
+}: MwendoPlayerProps) {
+  const storeApi = useMwendoStoreApi();
+  const setPlayerSnapshot = useMwendoStore((state) => state.setPlayerSnapshot);
+  const movementMode = useMwendoStore((state) => state.movementMode);
+
   const bodyRef = useRef<RapierRigidBody>(null);
   const visualRef = useRef<Group>(null);
   const pelvisRef = useRef<Group>(null);
@@ -42,8 +77,17 @@ export function PlayerController() {
   const rightUpperLegRef = useRef<Group>(null);
   const rightLowerLegRef = useRef<Group>(null);
   const gaitPhaseRef = useRef(0);
-  const input = usePlayerInput();
-  const setPlayerSnapshot = useGameStore((state) => state.setPlayerSnapshot);
+  const idleInputRef = useRef<MwendoInputState | null>({ ...DEFAULT_MWENDO_INPUT });
+  const keyboardInputRef = useMwendoKeyboardInput(controls === "keyboard");
+  const initialPositionRef = useRef(position);
+
+  useEffect(() => {
+    setPlayerSnapshot({
+      position: initialPositionRef.current,
+      facing: storeApi.getState().playerFacing,
+      movementMode: "idle",
+    });
+  }, [setPlayerSnapshot, storeApi]);
 
   useFrame((_, delta) => {
     const body = bodyRef.current;
@@ -54,10 +98,12 @@ export function PlayerController() {
       return;
     }
 
-    const keys = input.current;
-    const yaw = useGameStore.getState().cameraYaw;
+    const activeInputRef =
+      inputRef ?? (controls === "keyboard" ? keyboardInputRef : idleInputRef);
+    const keys = activeInputRef.current ?? DEFAULT_MWENDO_INPUT;
+    const { cameraYaw, playerFacing } = storeApi.getState();
 
-    forward.set(Math.sin(yaw), 0, Math.cos(yaw));
+    forward.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
     right.set(forward.z, 0, -forward.x);
     movement.set(0, 0, 0);
 
@@ -71,7 +117,7 @@ export function PlayerController() {
       movement.normalize();
     }
 
-    const movementMode: MovementMode = keys.crouch
+    const nextMovementMode: MwendoMovementMode = keys.crouch
       ? "crouch"
       : hasMovementInput && keys.run
         ? "run"
@@ -80,10 +126,13 @@ export function PlayerController() {
           : "idle";
 
     const speed =
-      movementMode === "run" ? MAX_SPEED :
-      movementMode === "walk" ? 4 :
-      movementMode === "crouch" ? 2 :
-      0;
+      nextMovementMode === "run"
+        ? MAX_SPEED
+        : nextMovementMode === "walk"
+          ? 4
+          : nextMovementMode === "crouch"
+            ? 2
+            : 0;
 
     const currentVelocity = body.linvel();
     body.setLinvel(
@@ -95,10 +144,12 @@ export function PlayerController() {
       true,
     );
 
-    const position = body.translation();
-    const facing = hasMovementInput ? Math.atan2(movement.x, movement.z) : useGameStore.getState().playerFacing;
+    const bodyPosition = body.translation();
+    const facing = hasMovementInput
+      ? Math.atan2(movement.x, movement.z)
+      : playerFacing;
     const speedRatio = speed / MAX_SPEED;
-    const crouchAmount = movementMode === "crouch" ? 1 : 0;
+    const crouchAmount = nextMovementMode === "crouch" ? 1 : 0;
 
     visual.rotation.y = MathUtils.damp(visual.rotation.y, facing, 10, delta);
 
@@ -111,18 +162,33 @@ export function PlayerController() {
     const legSwing = 0.82 * speedRatio;
     const armSwing = 0.68 * speedRatio;
 
-    visual.position.y = MathUtils.damp(visual.position.y, 0.02 + idleBreath * 0.3, 8, delta);
+    visual.position.y = MathUtils.damp(
+      visual.position.y,
+      0.02 + idleBreath * 0.3,
+      8,
+      delta,
+    );
     pelvis.position.y = MathUtils.damp(
       pelvis.position.y,
       0.9 - crouchAmount * 0.24 + bounce - idleBreath,
       10,
       delta,
     );
-    pelvis.rotation.y = MathUtils.damp(pelvis.rotation.y, torsoTwist * 0.35, 10, delta);
+    pelvis.rotation.y = MathUtils.damp(
+      pelvis.rotation.y,
+      torsoTwist * 0.35,
+      10,
+      delta,
+    );
 
     dampAxis(spineRef, "x", -0.04 + crouchAmount * 0.34 - speedRatio * 0.02, delta);
     dampAxis(spineRef, "y", torsoTwist, delta);
-    dampAxis(spineRef, "z", Math.sin(gaitPhaseRef.current * 2) * 0.04 * speedRatio, delta);
+    dampAxis(
+      spineRef,
+      "z",
+      Math.sin(gaitPhaseRef.current * 2) * 0.04 * speedRatio,
+      delta,
+    );
     dampAxis(headRef, "x", 0.08 - crouchAmount * 0.18 - idleBreath * 1.4, delta);
     dampAxis(headRef, "y", -torsoTwist * 0.45, delta);
 
@@ -130,24 +196,42 @@ export function PlayerController() {
     dampAxis(rightUpperArmRef, "x", stride * armSwing - crouchAmount * 0.16, delta);
     dampAxis(leftUpperArmRef, "z", -0.08 + crouchAmount * 0.1, delta);
     dampAxis(rightUpperArmRef, "z", 0.08 - crouchAmount * 0.1, delta);
-    dampAxis(leftLowerArmRef, "x", Math.max(0, -mirroredStride) * 0.46 * speedRatio + crouchAmount * 0.22, delta);
-    dampAxis(rightLowerArmRef, "x", Math.max(0, -stride) * 0.46 * speedRatio + crouchAmount * 0.22, delta);
+    dampAxis(
+      leftLowerArmRef,
+      "x",
+      Math.max(0, -mirroredStride) * 0.46 * speedRatio + crouchAmount * 0.22,
+      delta,
+    );
+    dampAxis(
+      rightLowerArmRef,
+      "x",
+      Math.max(0, -stride) * 0.46 * speedRatio + crouchAmount * 0.22,
+      delta,
+    );
 
     dampAxis(leftUpperLegRef, "x", stride * legSwing - crouchAmount * 0.48, delta);
     dampAxis(rightUpperLegRef, "x", mirroredStride * legSwing - crouchAmount * 0.48, delta);
     dampAxis(leftUpperLegRef, "z", -0.04 * speedRatio, delta);
     dampAxis(rightUpperLegRef, "z", 0.04 * speedRatio, delta);
-    dampAxis(leftLowerLegRef, "x", Math.max(0, -stride) * 0.8 * speedRatio + crouchAmount * 0.72, delta);
-    dampAxis(rightLowerLegRef, "x", Math.max(0, -mirroredStride) * 0.8 * speedRatio + crouchAmount * 0.72, delta);
+    dampAxis(
+      leftLowerLegRef,
+      "x",
+      Math.max(0, -stride) * 0.8 * speedRatio + crouchAmount * 0.72,
+      delta,
+    );
+    dampAxis(
+      rightLowerLegRef,
+      "x",
+      Math.max(0, -mirroredStride) * 0.8 * speedRatio + crouchAmount * 0.72,
+      delta,
+    );
 
     setPlayerSnapshot({
-      position: [position.x, position.y, position.z],
+      position: [bodyPosition.x, bodyPosition.y, bodyPosition.z],
       facing,
-      movementMode,
+      movementMode: nextMovementMode,
     });
   });
-
-  const movementMode = useGameStore((state) => state.movementMode);
 
   return (
     <RigidBody
@@ -155,10 +239,10 @@ export function PlayerController() {
       colliders={false}
       canSleep={false}
       enabledRotations={[false, false, false]}
-      linearDamping={8}
-      position={[0, 2.5, 6]}
+      linearDamping={linearDamping}
+      position={position}
     >
-      <CapsuleCollider args={[0.52, 0.34]} />
+      <CapsuleCollider args={[capsuleHalfHeight, capsuleRadius]} />
       <PrimitiveHero
         movementMode={movementMode}
         rig={{

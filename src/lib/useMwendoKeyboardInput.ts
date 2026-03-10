@@ -1,24 +1,10 @@
 import { useEffect, useRef } from "react";
+import {
+  DEFAULT_MWENDO_INPUT,
+  type MwendoInputState,
+} from "./types";
 
-export type InputState = {
-  forward: boolean;
-  backward: boolean;
-  left: boolean;
-  right: boolean;
-  run: boolean;
-  crouch: boolean;
-};
-
-const initialState: InputState = {
-  forward: false,
-  backward: false,
-  left: false,
-  right: false,
-  run: false,
-  crouch: false,
-};
-
-const keyMap: Record<string, keyof InputState> = {
+const keyMap: Record<string, keyof MwendoInputState> = {
   ArrowUp: "forward",
   KeyW: "forward",
   ArrowDown: "backward",
@@ -34,10 +20,15 @@ const keyMap: Record<string, keyof InputState> = {
   KeyC: "crouch",
 };
 
-export function usePlayerInput() {
-  const stateRef = useRef<InputState>({ ...initialState });
+export function useMwendoKeyboardInput(enabled = true) {
+  const stateRef = useRef<MwendoInputState>({ ...DEFAULT_MWENDO_INPUT });
 
   useEffect(() => {
+    if (!enabled) {
+      stateRef.current = { ...DEFAULT_MWENDO_INPUT };
+      return;
+    }
+
     const handleKey = (pressed: boolean) => (event: KeyboardEvent) => {
       const mapped = keyMap[event.code];
 
@@ -49,7 +40,7 @@ export function usePlayerInput() {
     };
 
     const handleBlur = () => {
-      stateRef.current = { ...initialState };
+      stateRef.current = { ...DEFAULT_MWENDO_INPUT };
     };
 
     const onKeyDown = handleKey(true);
@@ -64,7 +55,7 @@ export function usePlayerInput() {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, []);
+  }, [enabled]);
 
   return stateRef;
 }

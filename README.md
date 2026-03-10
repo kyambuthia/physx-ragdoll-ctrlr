@@ -1,57 +1,97 @@
 # Mwendo
 
-`Mwendo` is a React Three Fiber prototype for building a production-grade third-person character stack in phases, starting with flatspace traversal and a rig-free primitive biped plus a visible ragdoll test target.
+`Mwendo` is now a hybrid `library + demo` project for a React Three Fiber third-person character controller. The package exports a reusable primitive player, follow camera, provider, and ragdoll dummy, while the demo app in this repo uses those same exports inside a flat test world.
 
-## Current prototype
+## What ships today
+
+- `MwendoProvider` for scoped controller state
+- `MwendoPlayer` for the primitive third-person character
+- `MwendoCameraRig` for a follow camera with optional pointer lock
+- `MwendoRagdollDummy` for sandbox physics testing
+- A Vite demo app that consumes the library entry instead of private app-only components
+
+## Repo layout
+
+- `src/lib`: publishable library source
+- `src/components`: demo-only scene pieces like the HUD, lights, and test arena
+- `dist`: library build output
+- `demo-dist`: demo site build output
+
+## Install shape
+
+When you publish this package, the intended consumer install is:
+
+```bash
+npm install mwendo react react-dom three @react-three/fiber @react-three/rapier @react-three/drei
+```
+
+If the `mwendo` package name is already taken on npm, rename it in `package.json` before publishing.
+
+## Basic usage
+
+```tsx
+import { Canvas } from "@react-three/fiber";
+import { Physics } from "@react-three/rapier";
+import {
+  MwendoCameraRig,
+  MwendoPlayer,
+  MwendoProvider,
+  MwendoRagdollDummy,
+} from "mwendo";
+
+export function Scene() {
+  return (
+    <MwendoProvider initialState={{ playerPosition: [0, 2.5, 6] }}>
+      <Canvas shadows>
+        <Physics>
+          <MwendoPlayer controls="keyboard" position={[0, 2.5, 6]} />
+          <MwendoRagdollDummy position={[-4, 5.5, -6]} />
+        </Physics>
+        <MwendoCameraRig />
+      </Canvas>
+    </MwendoProvider>
+  );
+}
+```
+
+## Exported API
+
+- `MwendoProvider`
+- `createMwendoStore`
+- `useMwendoStore`
+- `useMwendoStoreApi`
+- `useMwendoKeyboardInput`
+- `MwendoPlayer`
+- `MwendoCameraRig`
+- `MwendoRagdollDummy`
+
+## Scripts
+
+- `npm run dev`: run the demo app
+- `npm run build:lib`: build the publishable package into `dist`
+- `npm run build:demo`: build the demo site into `demo-dist`
+- `npm run build`: typecheck, then build both library and demo
+
+## Current capabilities
 
 - Third-person chase camera with mouse-look via pointer lock
-- Physics-backed capsule controller with a procedural primitive biped for walk, run, and crouch states
+- Physics-backed capsule controller with a rounded primitive biped
+- Walk, run, and crouch movement states
 - Flat test arena with crates and a ramp for collision checks
-- Jointed ragdoll dummy to validate impacts and future recovery work
+- Separate jointed ragdoll dummy for impact testing
 
-## Why this stack
+## Next packaging steps
 
-- `@react-three/fiber` keeps scene orchestration in React while leaving room for a bespoke gameplay architecture.
-- `@react-three/rapier` gives us performant rigid-body physics for the controller, ragdolls, props, and later vehicle interaction volumes.
-- `zustand` provides a small shared state layer for controller intent, camera parameters, and animation state without forcing a heavy ECS too early.
+The next package-quality improvements are:
 
-## Roadmap
+1. Expose custom input adapters beyond keyboard control.
+2. Add callbacks/events for collisions, movement mode changes, and snapshot updates.
+3. Add jump, interaction hooks, and ragdoll handoff.
+4. Add richer docs and a versioned example app.
 
-### Phase 1: Sandbox feel
+## Design notes
 
-1. Tighten controller tuning: acceleration, deceleration, slopes, step offset, grounded detection, and jump buffering.
-2. Evolve the primitive biped into a controllable active-ragdoll or hybrid puppet before deciding whether a skinned shell is even necessary.
-3. Add debug overlays for contact normals, movement state, and animation blend weights.
-
-### Phase 2: Locomotion quality
-
-1. Add stride warping, foot IK, turn-in-place, stop transitions, and slope-aware pose correction.
-2. Introduce motion matching or phase-aware locomotion once the move set grows past simple blend-tree coverage.
-3. Support contextual crouch locomotion, aiming offsets, upper-body masking, and camera-aware strafing.
-
-### Phase 3: Interaction layer
-
-1. Build an interaction system with authored targets and hand-placement constraints.
-2. Add car entry and door interaction states with reach targets, seat alignment, and stateful camera transitions.
-3. Add golf interactions as a controlled mini-game state with object pickup, alignment, swing timing, and ball physics.
-
-### Phase 4: Animation robustness
-
-1. Blend animation with physics for hit reactions, stumble recovery, and ragdoll handoff.
-2. Add network-safe input prediction boundaries if multiplayer is ever required.
-3. Introduce telemetry-driven tuning for traversal friction, camera comfort, and animation response times.
-
-## Research notes
-
-These are the main technical references shaping the architecture:
-
-- Motion Matching and The Road to Next-Gen Animation Data Selection, SIGGRAPH 2016 course, Ubisoft.
-- Phase-Functioned Neural Networks for Character Control, SIGGRAPH 2018.
-- DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills, SIGGRAPH 2018.
-- Neural State Machine for Character-Scene Interactions, SIGGRAPH 2019.
-- DeepPhase: Periodic Autoencoders for Learning Motion Phase Manifolds, SIGGRAPH 2022.
-
-For this repo, the practical conclusion is to start with a deterministic gameplay controller and layer animation sophistication afterward. That keeps interactions like shooting, opening doors, and golf swings debuggable while still leaving the door open to motion matching or learned controllers once the move library becomes large enough.
+The practical conclusion for this repo is still the same: keep gameplay control deterministic and debuggable first, then layer animation sophistication afterward. That keeps future interactions like shooting, opening doors, and golf swings debuggable while leaving room for motion matching or learned controllers later.
 
 See also:
 
