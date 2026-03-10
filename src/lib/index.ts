@@ -18,3 +18,4 @@ export type {
   MwendoMovementMode,
   MwendoVec3,
 } from "./types";
+export { DEFAULT_MWENDO_INPUT } from "./types";

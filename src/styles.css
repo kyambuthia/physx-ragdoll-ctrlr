@@ -21,10 +21,12 @@ body,
 
 body {
   color: #f4f6fb;
+  overscroll-behavior: none;
 }
 
 canvas {
   display: block;
+  touch-action: none;
 }
 
 .key-ribbon {

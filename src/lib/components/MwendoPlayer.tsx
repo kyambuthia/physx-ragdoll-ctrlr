@@ -98,9 +98,19 @@ export function MwendoPlayer({
       return;
     }
 
-    const activeInputRef =
-      inputRef ?? (controls === "keyboard" ? keyboardInputRef : idleInputRef);
-    const keys = activeInputRef.current ?? DEFAULT_MWENDO_INPUT;
+    const externalInput = inputRef?.current ?? DEFAULT_MWENDO_INPUT;
+    const internalInput =
+      controls === "keyboard"
+        ? keyboardInputRef.current ?? DEFAULT_MWENDO_INPUT
+        : idleInputRef.current ?? DEFAULT_MWENDO_INPUT;
+    const keys: MwendoInputState = {
+      forward: externalInput.forward || internalInput.forward,
+      backward: externalInput.backward || internalInput.backward,
+      left: externalInput.left || internalInput.left,
+      right: externalInput.right || internalInput.right,
+      run: externalInput.run || internalInput.run,
+      crouch: externalInput.crouch || internalInput.crouch,
+    };
     const { cameraYaw, playerFacing } = storeApi.getState();
 
     forward.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
