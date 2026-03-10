@@ -1,4 +1,3 @@
-import { Grid } from "@react-three/drei";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 
 function Crate(props: { position: [number, number, number]; scale?: [number, number, number] }) {
@@ -17,14 +16,9 @@ function Crate(props: { position: [number, number, number]; scale?: [number, num
 export function FlatArena() {
   return (
     <>
-      <Grid
-        args={[180, 180]}
-        cellColor="#73908d"
-        sectionColor="#516864"
-        infiniteGrid
-        fadeDistance={110}
-        fadeStrength={1.6}
-        position={[0, 0.002, 0]}
+      <gridHelper
+        args={[180, 180, "#5a756f", "#8aa8a1"]}
+        position={[0, 0.012, 0]}
       />
 
       <RigidBody type="fixed" colliders={false}>
@@ -48,6 +42,11 @@ export function FlatArena() {
       <Crate position={[-8, 3.8, -2]} />
       <Crate position={[-9.1, 5.1, -2.4]} />
       <Crate position={[-7.4, 5.6, -1.8]} />
+
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={2}>
+        <ringGeometry args={[2.2, 2.85, 48]} />
+        <meshBasicMaterial color="#6f8a83" transparent opacity={0.35} />
+      </mesh>
     </>
   );
 }

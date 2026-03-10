@@ -2,7 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { Suspense } from "react";
 import { FlatArena } from "./components/FlatArena";
-import { Hud } from "./components/Hud";
+import { KeyRibbon } from "./components/KeyRibbon";
 import { Lights } from "./components/Lights";
 import {
   MwendoCameraRig,
@@ -14,7 +14,7 @@ import {
 export default function App() {
   return (
     <MwendoProvider initialState={{ playerPosition: [0, 2.5, 6] }}>
-      <Hud />
+      <KeyRibbon />
       <Canvas
         camera={{ fov: 42, near: 0.1, far: 250, position: [0, 3.5, 8] }}
         gl={{ antialias: true }}

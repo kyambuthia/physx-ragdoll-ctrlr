@@ -27,60 +27,72 @@ canvas {
   display: block;
 }
 
-.hud {
+.key-ribbon {
   position: fixed;
-  top: 20px;
-  left: 20px;
+  left: 50%;
+  bottom: 20px;
+  width: min(560px, calc(100vw - 28px));
+  height: 66px;
+  transform: translateX(-50%);
   z-index: 10;
-  width: min(360px, calc(100vw - 40px));
-  padding: 16px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 18px;
-  background: rgba(13, 19, 33, 0.72);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 18px 48px rgba(10, 20, 38, 0.22);
+  pointer-events: none;
 }
 
-.hud h1 {
-  margin: 0 0 8px;
-  font-size: 1.05rem;
-}
-
-.hud p,
-.hud li {
-  margin: 0;
-  color: rgba(245, 247, 252, 0.86);
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-
-.hud ul {
-  margin: 12px 0 0;
-  padding-left: 18px;
-}
-
-.hud .mode {
+.key-ribbon__key {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  min-width: 56px;
+  height: 56px;
+  margin-left: -28px;
+  padding: 0 16px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08) 22%, rgba(9, 14, 24, 0.88) 22%, rgba(17, 24, 39, 0.96) 100%);
+  box-shadow:
+    0 7px 0 rgba(5, 10, 18, 0.4),
+    0 18px 34px rgba(8, 13, 22, 0.18);
+  color: #f5f7ff;
+  font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition:
+    transform 240ms cubic-bezier(0.2, 0.75, 0.24, 1),
+    opacity 240ms ease,
+    filter 240ms ease;
 }
 
-.hud .swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #72f2c2;
-  box-shadow: 0 0 14px rgba(114, 242, 194, 0.7);
+.key-ribbon__key::after {
+  content: "";
+  position: absolute;
+  inset: 6px 7px auto;
+  height: 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0));
+}
+
+.key-ribbon__key.is-leaving {
+  opacity: 0;
+  filter: blur(6px);
 }
 
 @media (max-width: 640px) {
-  .hud {
-    top: 12px;
-    left: 12px;
-    width: calc(100vw - 24px);
+  .key-ribbon {
+    bottom: 14px;
+    width: calc(100vw - 18px);
+  }
+
+  .key-ribbon__key {
+    min-width: 48px;
+    height: 50px;
+    margin-left: -24px;
+    padding: 0 12px;
+    font-size: 0.78rem;
   }
 }
