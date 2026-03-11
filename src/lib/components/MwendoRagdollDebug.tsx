@@ -36,7 +36,7 @@ export type MwendoRagdollBodyDescriptor = {
 
 export type MwendoRagdollJointDescriptor = {
   key: string;
-  kind: "spherical" | "revolute";
+  kind: "fixed" | "spherical" | "revolute";
   bodyA: RefObject<RapierRigidBody | null>;
   bodyB: RefObject<RapierRigidBody | null>;
   anchorA: MwendoVec3;
@@ -77,7 +77,7 @@ type TrailSnapshot = {
 
 type JointSnapshot = {
   key: string;
-  kind: "spherical" | "revolute";
+  kind: "fixed" | "spherical" | "revolute";
   anchorA: MwendoVec3;
   anchorB: MwendoVec3;
   frameAxes: [MwendoVec3, MwendoVec3, MwendoVec3];

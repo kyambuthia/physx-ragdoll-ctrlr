@@ -3,6 +3,8 @@ import { createRef, type MutableRefObject, type RefObject } from "react";
 import type { RapierRigidBody } from "@react-three/rapier";
 import type { MwendoVec3 } from "../types";
 
+type MwendoQuat = [number, number, number, number];
+
 export type MwendoHumanoidBodyKey =
   | "pelvis"
   | "chest"
@@ -51,15 +53,26 @@ export type MwendoHumanoidSphericalJointDefinition = {
   anchorB: MwendoVec3;
 };
 
-export type MwendoHumanoidSphericalJointKey =
-  | "spine"
-  | "neck"
+export type MwendoHumanoidSphericalJointKey = "spine";
+
+export type MwendoHumanoidFixedJointKey = "neck";
+
+export type MwendoHumanoidFixedJointDefinition = {
+  key: MwendoHumanoidFixedJointKey;
+  kind: "fixed";
+  bodyA: MwendoHumanoidBodyKey;
+  bodyB: MwendoHumanoidBodyKey;
+  anchorA: MwendoVec3;
+  anchorB: MwendoVec3;
+  frameA: MwendoQuat;
+  frameB: MwendoQuat;
+};
+
+export type MwendoHumanoidRevoluteJointKey =
   | "shoulderLeft"
   | "shoulderRight"
   | "hipLeft"
-  | "hipRight";
-
-export type MwendoHumanoidRevoluteJointKey =
+  | "hipRight"
   | "elbowLeft"
   | "wristLeft"
   | "elbowRight"
@@ -81,6 +94,7 @@ export type MwendoHumanoidRevoluteJointDefinition = {
 };
 
 export type MwendoHumanoidJointDefinition =
+  | MwendoHumanoidFixedJointDefinition
   | MwendoHumanoidSphericalJointDefinition
   | MwendoHumanoidRevoluteJointDefinition;
 
@@ -116,18 +130,18 @@ export const MWENDO_HUMANOID_BODY_DEFINITIONS: MwendoHumanoidBodyDefinition[] = 
   {
     key: "head",
     label: "Head",
-    position: [0, 1.42, 0],
-    mass: 1,
+    position: [0, 1.5, 0],
+    mass: 0.6,
     color: "#f1d7b8",
     collider: "ball",
-    shape: { kind: "sphere", radius: 0.32 },
+    shape: { kind: "sphere", radius: 0.28 },
     roughness: 0.9,
   },
   {
     key: "upperArmLeft",
     label: "Upper Arm L",
     position: [-0.44, 0.68, 0],
-    mass: 0.7,
+    mass: 0.55,
     color: "#4a88c7",
     collider: "cuboid",
     shape: { kind: "box", size: [0.24, 0.58, 0.24] },
@@ -137,7 +151,7 @@ export const MWENDO_HUMANOID_BODY_DEFINITIONS: MwendoHumanoidBodyDefinition[] = 
     key: "lowerArmLeft",
     label: "Lower Arm L",
     position: [-0.44, 0.2, 0],
-    mass: 0.55,
+    mass: 0.4,
     color: "#3d6b9b",
     collider: "cuboid",
     shape: { kind: "box", size: [0.2, 0.54, 0.2] },
@@ -147,7 +161,7 @@ export const MWENDO_HUMANOID_BODY_DEFINITIONS: MwendoHumanoidBodyDefinition[] = 
     key: "handLeft",
     label: "Hand L",
     position: [-0.44, -0.12, 0],
-    mass: 0.3,
+    mass: 0.18,
     color: "#f1d7b8",
     collider: "cuboid",
     shape: { kind: "box", size: [0.18, 0.18, 0.26] },
@@ -157,7 +171,7 @@ export const MWENDO_HUMANOID_BODY_DEFINITIONS: MwendoHumanoidBodyDefinition[] = 
     key: "upperArmRight",
     label: "Upper Arm R",
     position: [0.44, 0.68, 0],
-    mass: 0.7,
+    mass: 0.55,
     color: "#4a88c7",
     collider: "cuboid",
     shape: { kind: "box", size: [0.24, 0.58, 0.24] },
@@ -167,7 +181,7 @@ export const MWENDO_HUMANOID_BODY_DEFINITIONS: MwendoHumanoidBodyDefinition[] = 
     key: "lowerArmRight",
     label: "Lower Arm R",
     position: [0.44, 0.2, 0],
-    mass: 0.55,
+    mass: 0.4,
     color: "#3d6b9b",
     collider: "cuboid",
     shape: { kind: "box", size: [0.2, 0.54, 0.2] },
@@ -177,7 +191,7 @@ export const MWENDO_HUMANOID_BODY_DEFINITIONS: MwendoHumanoidBodyDefinition[] = 
     key: "handRight",
     label: "Hand R",
     position: [0.44, -0.12, 0],
-    mass: 0.3,
+    mass: 0.18,
     color: "#f1d7b8",
     collider: "cuboid",
     shape: { kind: "box", size: [0.18, 0.18, 0.26] },
@@ -249,50 +263,64 @@ export const MWENDO_HUMANOID_SPHERICAL_JOINT_DEFINITIONS: MwendoHumanoidSpherica
       anchorA: [0, 0.28, 0],
       anchorB: [0, -0.4, 0],
     },
+  ];
+
+export const MWENDO_HUMANOID_FIXED_JOINT_DEFINITIONS: MwendoHumanoidFixedJointDefinition[] =
+  [
     {
       key: "neck",
-      kind: "spherical",
+      kind: "fixed",
       bodyA: "chest",
       bodyB: "head",
-      anchorA: [0, 0.46, 0],
+      anchorA: [0, 0.54, 0],
       anchorB: [0, -0.28, 0],
-    },
-    {
-      key: "shoulderLeft",
-      kind: "spherical",
-      bodyA: "chest",
-      bodyB: "upperArmLeft",
-      anchorA: [-0.44, 0.24, 0],
-      anchorB: [0, 0.24, 0],
-    },
-    {
-      key: "shoulderRight",
-      kind: "spherical",
-      bodyA: "chest",
-      bodyB: "upperArmRight",
-      anchorA: [0.44, 0.24, 0],
-      anchorB: [0, 0.24, 0],
-    },
-    {
-      key: "hipLeft",
-      kind: "spherical",
-      bodyA: "pelvis",
-      bodyB: "upperLegLeft",
-      anchorA: [-0.18, -0.22, 0],
-      anchorB: [0, 0.34, 0],
-    },
-    {
-      key: "hipRight",
-      kind: "spherical",
-      bodyA: "pelvis",
-      bodyB: "upperLegRight",
-      anchorA: [0.18, -0.22, 0],
-      anchorB: [0, 0.34, 0],
+      frameA: [0, 0, 0, 1],
+      frameB: [0, 0, 0, 1],
     },
   ];
 
 export const MWENDO_HUMANOID_REVOLUTE_JOINT_DEFINITIONS: MwendoHumanoidRevoluteJointDefinition[] =
   [
+    {
+      key: "shoulderLeft",
+      kind: "revolute",
+      bodyA: "chest",
+      bodyB: "upperArmLeft",
+      anchorA: [-0.44, 0.24, 0],
+      anchorB: [0, 0.24, 0],
+      axis: [1, 0, 0],
+      limits: [-1.3, 1],
+    },
+    {
+      key: "shoulderRight",
+      kind: "revolute",
+      bodyA: "chest",
+      bodyB: "upperArmRight",
+      anchorA: [0.44, 0.24, 0],
+      anchorB: [0, 0.24, 0],
+      axis: [1, 0, 0],
+      limits: [-1.3, 1],
+    },
+    {
+      key: "hipLeft",
+      kind: "revolute",
+      bodyA: "pelvis",
+      bodyB: "upperLegLeft",
+      anchorA: [-0.18, -0.22, 0],
+      anchorB: [0, 0.34, 0],
+      axis: [1, 0, 0],
+      limits: [-0.95, 0.85],
+    },
+    {
+      key: "hipRight",
+      kind: "revolute",
+      bodyA: "pelvis",
+      bodyB: "upperLegRight",
+      anchorA: [0.18, -0.22, 0],
+      anchorB: [0, 0.34, 0],
+      axis: [1, 0, 0],
+      limits: [-0.95, 0.85],
+    },
     {
       key: "elbowLeft",
       kind: "revolute",
@@ -376,6 +404,7 @@ export const MWENDO_HUMANOID_REVOLUTE_JOINT_DEFINITIONS: MwendoHumanoidRevoluteJ
   ];
 
 export const MWENDO_HUMANOID_JOINT_DEFINITIONS: MwendoHumanoidJointDefinition[] = [
+  ...MWENDO_HUMANOID_FIXED_JOINT_DEFINITIONS,
   ...MWENDO_HUMANOID_SPHERICAL_JOINT_DEFINITIONS,
   ...MWENDO_HUMANOID_REVOLUTE_JOINT_DEFINITIONS,
 ];
@@ -402,6 +431,10 @@ export function createMwendoHumanoidBodyRefs(): MwendoHumanoidBodyRefs {
 
 export function createMwendoHumanoidRevoluteJointRefs(): MwendoHumanoidRevoluteJointRefs {
   return {
+    shoulderLeft: { current: null },
+    shoulderRight: { current: null },
+    hipLeft: { current: null },
+    hipRight: { current: null },
     elbowLeft: { current: null },
     wristLeft: { current: null },
     elbowRight: { current: null },

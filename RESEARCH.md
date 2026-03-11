@@ -1,135 +1,198 @@
-# Relevant Technical Studies
+# Active-Ragdoll Literature Basis
 
-These are the most relevant references for the long-term target: a third-person playable character that can locomote, shoot, recover from physics hits, interact with vehicles and doors, and support sports-like actions such as golf.
+This repo is now explicitly following a production-oriented active-ragdoll path for mobile and PC. The target is not a research demo that only looks good in one scene. The target is a deterministic, inspectable, shippable controller that can walk, run, jump, absorb impacts, and recover without requiring ML inference at runtime.
 
-## Current implementation takeaway
+The implementation decision for `mwendo` is:
 
-The repo is already following the right first principle from this research set:
+- use a `SIMBICON`-style finite-state locomotion controller as the core runtime architecture
+- add `capture point` and inverted-pendulum-inspired stepping heuristics for balance recovery and foot placement
+- borrow directional locomotion, gait parameterization, and robustness ideas from `Generalized Biped Walking Control`
+- treat data-driven or RL controllers as later research branches, not the default shipping path
 
-- keep the controller deterministic
-- keep the camera and state model explicit
-- keep the physics body inspectable
-- delay motion-matching or learned animation until the gameplay contract is stable
+## Why this stack was chosen
 
-That is why the current library ships a controllable third-person controller, explicit movement snapshots, and a humanoid ragdoll debug lab before attempting a skinned animation stack.
+For this repo, the most important constraints are:
 
-## 1. Motion Matching and The Road to Next-Gen Animation
+- predictable performance on mobile and PC
+- no neural-network inference in the hot path
+- explicit gait states and failure modes
+- clear visual debugging of support, COM, and joint targets
+- easy regression testing in `src/lib`
 
-Link: <https://media.gdcvault.com/gdc2016/Presentations/Clavet_Simon_MotionMatching.pdf>
+That makes a deterministic controller family a better fit than a DeepMimic-style runtime or a motion-matching-heavy stack.
 
-Why it matters:
+## Core papers
 
-- Best practical reference once locomotion and interaction clips become too numerous for comfortable manual transition management.
-- Excellent for responsive starts, stops, pivots, and traversal.
+## 1. SIMBICON: Simple Biped Locomotion Control
 
-Best use in `mwendo`:
+Reference:
 
-- Future replacement for a manual locomotion graph after the current controller and interaction interfaces stabilize.
-
-## 2. Phase-Functioned Neural Networks for Character Control
-
-Link: <https://theorangeduck.com/page/phase-functioned-neural-networks-character-control>
-
-Why it matters:
-
-- Strong reference for terrain-aware locomotion, crouching under obstacles, and user-driven movement over varied geometry.
-- Good conceptual guide for trajectory sampling and phase-aware motion control even without training a network today.
-
-Best use in `mwendo`:
-
-- Design inspiration for slope handling, trajectory queries, and a richer locomotion feature model.
-
-## 3. DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills
-
-Link: <https://xbpeng.github.io/projects/DeepMimic/index.html>
+- Yin, Loken, van de Panne, `SIMBICON: Simple Biped Locomotion Control`, SIGGRAPH 2007
+- PDF: <https://people.cs.ubc.ca/~van/papers/2007-siggraph-simbicon.pdf>
 
 Why it matters:
 
-- The clearest reference for physics-driven characters that can take impacts, recover, and perform stylized skills.
-- Directly relevant to active ragdolls, hit reactions, and recovery logic.
+- This is the best direct reference for a hand-authored active-ragdoll controller that remains small enough to debug.
+- It shows how to combine a locomotion state machine with target joint poses and simple feedback terms.
+- It is explicitly aimed at dynamic biped locomotion rather than purely kinematic animation playback.
 
-Best use in `mwendo`:
+Main ideas to carry into `mwendo`:
 
-- Long-term reference for player ragdoll handoff, recovery, and physically grounded special actions.
+- locomotion is a sequence of stance/swing states, not a continuous unconstrained motor soup
+- each state has a target pose and a short list of feedback terms
+- pelvis and torso control should be expressed partly in world space, not only local joint space
+- swing leg placement should react to tracking error and COM velocity, not only phase
 
-## 4. Neural State Machine for Character-Scene Interactions
+Practical mapping to this repo:
 
-Link: <https://github.com/sebastianstarke/AI4Animation>
+- `MwendoActiveRagdollPlayer.tsx` owns the gait FSM
+- state outputs are target hip, knee, ankle, shoulder, elbow, and torso goals
+- transitions are driven by elapsed phase, support contact, and failure predicates
+- motor gains are phase-specific and movement-mode-specific
 
-Why it matters:
+## 2. Generalized Biped Walking Control
 
-- One of the strongest references for doors, sitting, carrying, and obstacle-aware interactions from simple controls.
-- Especially relevant because the end goal includes opening car doors and environment-aware actions.
+Reference:
 
-Best use in `mwendo`:
-
-- Blueprint for a future interaction layer that reasons about object geometry, approach alignment, and hand targets.
-
-## 5. Local Motion Phases for Learning Multi-Contact Character Movements
-
-Link: <https://github.com/sebastianstarke/AI4Animation>
-
-Why it matters:
-
-- Useful when a single global phase variable is not enough, which happens quickly with sports, shooting, ball handling, and door interaction.
-- Strong fit for golf-like actions and mixed hand-foot interaction timing.
-
-Best use in `mwendo`:
-
-- Upgrade path for complex action synthesis after the deterministic interaction layer exists.
-
-## 6. Neural Animation Layering for Synthesizing Martial Arts Movements
-
-Link: <https://www.sebastianxstarke.com/assets/portfolio/14/page.html>
+- Coros, Beaudoin, van de Panne, `Generalized Biped Walking Control`, SIGGRAPH 2010
+- Project page: <https://www.cs.ubc.ca/~van/papers/2010-TOG-gbwc/index.html>
 
 Why it matters:
 
-- Useful for combining locomotion with upper-body intent, which is exactly the problem space for moving while aiming or shooting.
-- Valuable conceptually even if the implementation remains authored and layered rather than learned.
+- This is the best follow-up once basic forward locomotion exists.
+- It broadens the controller space to forward motion, turning, speed changes, starts, stops, and other motion variants without abandoning a deterministic control architecture.
 
-Best use in `mwendo`:
+Main ideas to carry into `mwendo`:
 
-- Reference for separating locomotion from action overlays and aiming systems.
+- locomotion should be parameterized by desired velocity and heading, not by a single hard-coded walk cycle
+- the controller should expose stride length, cadence, trunk lean, and foot-placement adjustments as functions of command state
+- support switching and stepping need to remain robust under perturbation
 
-## 7. DeepPhase: Periodic Autoencoders for Learning Motion Phase Manifolds
+Practical mapping to this repo:
 
-Link: <https://i.cs.hku.hk/~taku/deepphase.pdf>
+- convert `walk`, `run`, `backpedal`, and `strafe` into parameter sets over the same gait controller
+- expose command-space-to-gait-space mappings in the library, not only in the demo
+- make turning and braking first-class locomotion modes instead of edge cases
 
-Why it matters:
+## 3. Capture Point: A Step toward Humanoid Push Recovery
 
-- Helps organize and search large mixed motion datasets.
-- Useful once the project accumulates locomotion, combat, and sports clips.
+Reference:
 
-Best use in `mwendo`:
-
-- Future data-pipeline improvement for motion retrieval, clustering, and transition quality.
-
-## 8. Animation Warping for Responsiveness in FIFA Soccer
-
-Link: <https://www.gdcvault.com/play/1012342/Animation-Warping-for-Responsiveness-in>
+- Pratt, Carff, Drakunov, Goswami, `Capture Point: A Step toward Humanoid Push Recovery`, Humanoids 2006
+- PDF: <https://www.cs.cmu.edu/~hgeyer/Teaching/R16-899B/Papers/Pratt%26Goswami06Humanoids.pdf>
 
 Why it matters:
 
-- Practical production reference for making authored animation respond to gameplay constraints.
-- Highly relevant for stride warping, target alignment, foot placement, and sports timing.
+- This paper provides the most useful compact balance heuristic for an active ragdoll that must decide whether it can recover in place or must step.
+- It gives a clear way to reason about recovery without needing a heavyweight whole-body optimizer.
 
-Best use in `mwendo`:
+Main ideas to carry into `mwendo`:
 
-- Immediate reference before any ML-heavy transition, especially for footsteps, turns, and golf alignment.
+- if the projected COM dynamics imply that balance cannot be recovered over the current support polygon, initiate a step
+- the simplest useful stepping target comes from the linear inverted pendulum model:
 
-## Recommended reading order
+`x_cp = x_com + v_com / omega_0`
 
-1. Motion Matching
-2. Animation Warping for Responsiveness in FIFA Soccer
-3. PFNN
-4. Neural State Machine
-5. Local Motion Phases
-6. DeepMimic
-7. DeepPhase
+where:
 
-That order matches the most practical shipping path for this repo:
+- `x_cp` is the capture point
+- `x_com` is the horizontal center of mass
+- `v_com` is horizontal COM velocity
+- `omega_0 = sqrt(g / z_com)`
 
-1. deterministic controller and camera
-2. interaction-aware authored animation
-3. physics blending and recovery
-4. larger data-driven or learned systems only when scale demands them
+Practical mapping to this repo:
+
+- compute COM and support polygon every frame in the library runtime
+- draw COM projection, capture point, and planned footfall in the debug layer
+- use capture-point distance as both a debug metric and a step-trigger condition
+
+## 4. Biped Walking Pattern Generation by using Preview Control of Zero-Moment Point
+
+Reference:
+
+- Kajita et al., `Biped Walking Pattern Generation by using Preview Control of Zero-Moment Point`, ICRA 2003
+- IEEE Xplore entry: <https://ieeexplore.ieee.org/document/1241826>
+
+Why it matters:
+
+- This is more robotics-oriented than the other sources, but it is important for disciplined COM reasoning and future terrain-aware stepping.
+- It is the right conceptual reference if the controller later needs explicit preview-based footstep planning or tighter landing stability.
+
+Main ideas to carry into `mwendo`:
+
+- maintain a clear distinction between commanded motion, COM motion, and support feasibility
+- use preview-like reasoning when choosing future support transitions on uneven ground
+
+Practical mapping to this repo:
+
+- phase 1 and phase 2 do not need full ZMP preview control
+- later terrain/stair/slope work can borrow the preview mindset without adopting the entire robotics stack
+
+## 5. DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills
+
+Reference:
+
+- Peng et al., `DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills`, SIGGRAPH 2018
+- Project page: <https://xbpeng.github.io/projects/DeepMimic/index.html>
+- arXiv: <https://arxiv.org/abs/1804.02717>
+
+Why it matters:
+
+- This is the strongest reference for what the long-term active-ragdoll ceiling looks like.
+- It is especially relevant for impact recovery, stylized action transfer, and get-up behavior.
+
+Why it is not the default path for `mwendo` v1:
+
+- training complexity is high
+- the runtime stack is much harder to inspect and regression-test
+- shipping on mobile becomes more complex
+- the repo does not yet have the data, tooling, or evaluation harness that makes RL worthwhile
+
+Practical mapping to this repo:
+
+- keep as a future branch for recovery, stunt actions, or imitation-learning experiments
+- do not block the deterministic locomotion controller on it
+
+## Chosen production interpretation
+
+The literature-backed production plan for `mwendo` is:
+
+1. `Reduced DOF articulated rig`
+2. `Finite-state active-ragdoll controller`
+3. `World-space pelvis/torso stabilization`
+4. `Capture-point-informed stepping`
+5. `Parameterized gait for forward, backward, strafe, turn, run`
+6. `Deterministic jump, landing, and recovery`
+7. `Optional future data-driven layers`
+
+This is intentionally conservative. It is the highest-confidence path to a controller that is:
+
+- understandable by gameplay programmers
+- tunable by hand
+- performant on mobile hardware
+- suitable for a published library
+
+## Production engineering consequences
+
+Because we are following this literature as a shipping plan instead of a toy experiment:
+
+- all control architecture changes belong in `src/lib`
+- `src/components` may visualize the work, but they must not become the primary implementation site
+- observability is part of the architecture, not an afterthought
+- every locomotion phase should surface measurable diagnostics: support state, COM projection, capture point, planned footfall, joint error, and transition reason
+
+## Reading order for implementation
+
+1. `SIMBICON`
+2. `Capture Point`
+3. `Generalized Biped Walking Control`
+4. `Kajita preview control`
+5. `DeepMimic`
+
+That order matches the recommended engineering sequence:
+
+1. stable deterministic walking
+2. stable stepping and recovery
+3. directional locomotion expansion
+4. terrain-aware planning
+5. advanced learned controllers only if product scope later demands them

@@ -31,4 +31,21 @@ describe("MWENDO_HUMANOID_JOINT_DEFINITIONS", () => {
       ).toBeLessThan(1e-6);
     }
   });
+
+  it("keeps the head collider clear of the chest in the bind pose", () => {
+    const chest = MWENDO_HUMANOID_BODY_DEFINITIONS.find((body) => body.key === "chest");
+    const head = MWENDO_HUMANOID_BODY_DEFINITIONS.find((body) => body.key === "head");
+
+    expect(chest).toBeDefined();
+    expect(head).toBeDefined();
+
+    if (!chest || !head || chest.shape.kind !== "box" || head.shape.kind !== "sphere") {
+      return;
+    }
+
+    const chestTop = chest.position[1] + chest.shape.size[1] * 0.5;
+    const headBottom = head.position[1] - head.shape.radius;
+
+    expect(headBottom - chestTop).toBeGreaterThanOrEqual(0.03);
+  });
 });

@@ -2,6 +2,28 @@
 
 `Mwendo` is a hybrid `library + demo` project for a React Three Fiber third-person controller stack. It ships a reusable primitive player, a follow camera with camera-occlusion handling, scoped controller state, a humanoid ragdoll dummy, and an in-world ragdoll debug lab.
 
+## Production active-ragdoll direction
+
+The repo is now explicitly being pushed toward a production-capable active ragdoll for mobile and PC.
+
+Important boundaries:
+
+- `src/lib` is the shipping codepath
+- `src/components` is demo-only support code
+- the demo is used to inspect and reproduce behavior, not to host one-off controller logic
+- visual debugging is treated as part of the runtime engineering surface, not as optional polish
+
+The chosen controller family is:
+
+- deterministic `SIMBICON`-style gait control
+- `capture-point` stepping heuristics for balance recovery
+- later directional locomotion expansion informed by `Generalized Biped Walking Control`
+
+See:
+
+- [RESEARCH.md](./RESEARCH.md)
+- [ROADMAP.md](./ROADMAP.md)
+
 ## Production baseline
 
 The library is now in a solid packageable baseline for:
@@ -15,7 +37,7 @@ The library is now in a solid packageable baseline for:
 What is not finished yet:
 
 - step-up and slope-specialized controller handling
-- active-ragdoll player handoff and recovery
+- production active-ragdoll locomotion, jumping, and recovery
 - authored interaction systems for doors, vehicles, weapons, and golf
 - skinned-character animation or motion-matching backends
 
@@ -143,6 +165,11 @@ Useful exported types:
 - `debug` to view the articulated rig through the ragdoll debug overlay
 - emitted snapshots report articulated foot support as `"none"`, `"left"`, `"right"`, or `"double"`
 
+Production note:
+
+- active-ragdoll work is still marked experimental, but the implementation plan is now production-oriented and literature-backed
+- new locomotion, balance, and recovery work should land in the library runtime first and only then be exposed through the demo
+
 `MwendoCameraRig` supports:
 
 - `followOffset`, `focusHeight`, and `smoothing`
@@ -161,6 +188,8 @@ Useful exported types:
 - `src/components`: demo-only scene pieces
 - `dist`: library build output
 - `demo-dist`: demo build output
+- `RESEARCH.md`: academic basis for the active-ragdoll architecture
+- `ROADMAP.md`: production implementation plan and phase breakdown
 
 ## Scripts
 
@@ -178,7 +207,7 @@ Demo tip:
 
 ## Design direction
 
-The current shipping strategy is still deliberate: keep control, camera, state, and interaction logic deterministic first, then add more sophisticated animation systems later. That keeps the library debuggable for gameplay code now while leaving a clean upgrade path toward active ragdolls, authored interaction poses, or motion matching later.
+The current shipping strategy is deliberate: keep control, camera, state, and interaction logic deterministic first, then add more sophisticated animation systems later. For the active ragdoll specifically, that now means a production-focused finite-state controller with explicit support, COM, and balance diagnostics before any learned or mocap-heavy runtime is considered.
 
 See also:
 

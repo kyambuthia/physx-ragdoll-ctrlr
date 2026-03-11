@@ -1,6 +1,7 @@
 import {
   RigidBody,
   interactionGroups,
+  useFixedJoint,
   useRevoluteJoint,
   useSphericalJoint,
   type RapierRigidBody,
@@ -21,12 +22,14 @@ import {
 import {
   createMwendoHumanoidBodyRefs,
   MWENDO_HUMANOID_BODY_DEFINITIONS,
+  MWENDO_HUMANOID_FIXED_JOINT_DEFINITIONS,
   MWENDO_HUMANOID_JOINT_DEFINITIONS,
   MWENDO_HUMANOID_REVOLUTE_JOINT_DEFINITIONS,
   MWENDO_HUMANOID_SPHERICAL_JOINT_DEFINITIONS,
   type MwendoHumanoidBodyDefinition,
   type MwendoHumanoidBodyKey,
   type MwendoHumanoidBodyRefs,
+  type MwendoHumanoidFixedJointDefinition,
   type MwendoHumanoidRevoluteJointKey,
   type MwendoHumanoidRevoluteJointDefinition,
   type MwendoHumanoidRevoluteJointRefs,
@@ -142,6 +145,27 @@ function HumanoidSphericalJoint({
   return null;
 }
 
+function HumanoidFixedJoint({
+  bodyRefs,
+  definition,
+}: {
+  bodyRefs: MwendoHumanoidBodyRefs;
+  definition: MwendoHumanoidFixedJointDefinition;
+}) {
+  useFixedJoint(
+    bodyRefs[definition.bodyA] as RefObject<RapierRigidBody>,
+    bodyRefs[definition.bodyB] as RefObject<RapierRigidBody>,
+    [
+      definition.anchorA,
+      definition.frameA,
+      definition.anchorB,
+      definition.frameB,
+    ],
+  );
+
+  return null;
+}
+
 function HumanoidRevoluteJoint({
   bodyRefs,
   definition,
@@ -230,6 +254,14 @@ export function MwendoHumanoidRagdoll({
           timeScale={timeScale}
         />
       ) : null}
+
+      {MWENDO_HUMANOID_FIXED_JOINT_DEFINITIONS.map((definition) => (
+        <HumanoidFixedJoint
+          key={definition.key}
+          bodyRefs={bodyRefs}
+          definition={definition}
+        />
+      ))}
 
       {MWENDO_HUMANOID_SPHERICAL_JOINT_DEFINITIONS.map((definition) => (
         <HumanoidSphericalJoint

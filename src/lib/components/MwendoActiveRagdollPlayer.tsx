@@ -44,6 +44,8 @@ const supportCorrection = new Vector3();
 const supportForward = new Vector3();
 const facingRight = new Vector3();
 const facingForward = new Vector3();
+const swingCorrection = new Vector3();
+const swingLateral = new Vector3();
 const tempFootPosition = new Vector3();
 
 type SupportSide = "left" | "right";
@@ -113,6 +115,29 @@ function driveJointToPosition(
   }
 
   joint.configureMotorPosition(targetPosition, stiffness, damping);
+}
+
+function deriveCommandEffort(
+  locomotionMode: MwendoMovementMode,
+  walkSpeed: number,
+  runSpeed: number,
+  crouchSpeed: number,
+) {
+  const safeRunSpeed = Math.max(0.001, runSpeed);
+
+  if (locomotionMode === "run") {
+    return 0.94;
+  }
+
+  if (locomotionMode === "walk") {
+    return MathUtils.clamp(walkSpeed / safeRunSpeed, 0.52, 0.68);
+  }
+
+  if (locomotionMode === "crouch") {
+    return MathUtils.clamp(crouchSpeed / safeRunSpeed, 0.24, 0.4);
+  }
+
+  return 0;
 }
 
 export function MwendoActiveRagdollPlayer({
@@ -364,11 +389,16 @@ export function MwendoActiveRagdollPlayer({
     const yawError = angleDifference(pelvisEuler.y, targetFacing);
     const horizontalSpeed = Math.hypot(currentVelocity.x, currentVelocity.z);
     const speedRatio = Math.min(1, horizontalSpeed / Math.max(0.001, runSpeed));
+    const commandEffort = hasMovementInput
+      ? deriveCommandEffort(locomotionMode, walkSpeed, runSpeed, crouchSpeed)
+      : 0;
+    const gaitEffort =
+      grounded && hasMovementInput ? Math.max(speedRatio, commandEffort) : speedRatio;
     const crouchAmount = keys.crouch ? 1 : 0;
     const airborneAmount = grounded ? 0 : 1;
 
     if (grounded && hasMovementInput) {
-      gaitPhaseRef.current += delta * MathUtils.lerp(1.6, 5.8, speedRatio);
+      gaitPhaseRef.current += delta * MathUtils.lerp(2.8, 6.4, gaitEffort);
     }
 
     pelvis.applyTorqueImpulse(
@@ -477,6 +507,9 @@ export function MwendoActiveRagdollPlayer({
       delta,
     );
 
+    facingRight.set(Math.cos(facing), 0, -Math.sin(facing));
+    facingForward.set(Math.sin(facing), 0, Math.cos(facing));
+
     if (groundedAfterControl) {
       supportCenter.set(0, 0, 0);
       let supportPointCount = 0;
@@ -507,19 +540,25 @@ export function MwendoActiveRagdollPlayer({
 
       if (supportPointCount > 0) {
         supportCenter.divideScalar(supportPointCount);
-        facingRight.set(Math.cos(facing), 0, -Math.sin(facing));
-        facingForward.set(Math.sin(facing), 0, Math.cos(facing));
 
         const lateralError =
           (supportCenter.x - rootPosition.x) * facingRight.x
           + (supportCenter.z - rootPosition.z) * facingRight.z;
+        const desiredPelvisLead =
+          groundedAfterControl && hasMovementInput
+            ? MathUtils.lerp(0.1, 0.24, gaitEffort)
+              * (supportStateAfterJump === "double" ? 0.82 : 1.05)
+            : 0;
         const forwardError =
           (supportCenter.x - rootPosition.x) * facingForward.x
-          + (supportCenter.z - rootPosition.z) * facingForward.z;
+          + (supportCenter.z - rootPosition.z) * facingForward.z
+          + desiredPelvisLead;
         const supportCentering =
           supportStateAfterJump === "double" ? 3.2 : 5.4;
         const supportForwarding =
-          supportStateAfterJump === "double" ? 2.4 : 4;
+          supportStateAfterJump === "double"
+            ? MathUtils.lerp(1.6, 2.6, gaitEffort)
+            : MathUtils.lerp(3.1, 4.4, gaitEffort);
         const desiredPelvisHeight =
           supportCenter.y + MathUtils.lerp(1.34, 1.08, crouchAmount);
         const heightError = desiredPelvisHeight - rootPosition.y;
@@ -557,43 +596,116 @@ export function MwendoActiveRagdollPlayer({
 
     if (groundedAfterControl && swingSide && hasMovementInput) {
       const swingFoot = swingSide === "left" ? leftFoot : rightFoot;
+      const swingFootPosition = swingFoot.translation();
       const swingVelocity = swingFoot.linvel();
       const swingMass = swingFoot.mass();
       const swingBlend =
-        Math.min(1, delta * 4.2)
+        Math.min(1, delta * 5.4)
         * (supportStateAfterJump === "double" ? 1 : 0.68);
+      const swingForwardOffset =
+        (swingFootPosition.x - rootPosition.x) * facingForward.x
+        + (swingFootPosition.z - rootPosition.z) * facingForward.z;
+      const swingLateralOffset =
+        (swingFootPosition.x - rootPosition.x) * facingRight.x
+        + (swingFootPosition.z - rootPosition.z) * facingRight.z;
+      const desiredSwingForwardOffset =
+        MathUtils.lerp(0.18, 0.48, gaitEffort)
+        * (supportStateAfterJump === "double" ? 1.05 : 0.86);
+      const desiredSwingLateralOffset =
+        (swingSide === "left" ? -1 : 1) * MathUtils.lerp(0.22, 0.28, gaitEffort);
+      const swingPlacementStrength =
+        supportStateAfterJump === "double"
+          ? MathUtils.lerp(4.8, 7.4, gaitEffort)
+          : MathUtils.lerp(3.8, 5.8, gaitEffort);
+      const swingDrive = MathUtils.lerp(0.38, 0.62, gaitEffort);
       const desiredSwingVelocityY =
         supportStateAfterJump === "double"
-          ? MathUtils.lerp(0.22, 0.62, speedRatio)
-          : MathUtils.lerp(0.1, 0.34, speedRatio);
+          ? MathUtils.lerp(0.4, 0.86, gaitEffort)
+          : MathUtils.lerp(0.18, 0.48, gaitEffort);
+
+      swingCorrection
+        .copy(facingForward)
+        .multiplyScalar(
+          (desiredSwingForwardOffset - swingForwardOffset)
+          * swingMass
+          * swingPlacementStrength
+          * delta,
+        );
+      swingLateral
+        .copy(facingRight)
+        .multiplyScalar(
+          (desiredSwingLateralOffset - swingLateralOffset)
+          * swingMass
+          * swingPlacementStrength
+          * 0.72
+          * delta,
+        );
+      swingCorrection.add(swingLateral);
 
       swingFoot.applyImpulse(
         {
-          x: (movement.x * speed * 0.28 - swingVelocity.x) * swingMass * swingBlend,
+          x:
+            (movement.x * speed * swingDrive - swingVelocity.x) * swingMass * swingBlend
+            + swingCorrection.x,
           y: Math.max(0, desiredSwingVelocityY - swingVelocity.y)
             * swingMass
             * swingBlend,
-          z: (movement.z * speed * 0.28 - swingVelocity.z) * swingMass * swingBlend,
+          z:
+            (movement.z * speed * swingDrive - swingVelocity.z) * swingMass * swingBlend
+            + swingCorrection.z,
         },
         true,
       );
     }
 
     const idleKneeTarget = MathUtils.lerp(-0.08, -0.68, crouchAmount);
-    const stanceKneeTarget = idleKneeTarget - speedRatio * 0.05;
+    const stanceKneeTarget = idleKneeTarget - gaitEffort * 0.08;
     const swingKneeTarget = groundedAfterControl
-      ? idleKneeTarget - MathUtils.lerp(0.14, 0.44, speedRatio)
+      ? idleKneeTarget - MathUtils.lerp(0.2, 0.52, gaitEffort)
       : -0.52;
     const idleAnkleTarget = MathUtils.lerp(0.08, -0.08, crouchAmount);
-    const stanceAnkleTarget = groundedAfterControl ? idleAnkleTarget + speedRatio * 0.05 : -0.04;
+    const stanceAnkleTarget = groundedAfterControl ? idleAnkleTarget + gaitEffort * 0.08 : -0.04;
     const swingAnkleTarget = groundedAfterControl
-      ? idleAnkleTarget - MathUtils.lerp(0.08, 0.2, speedRatio)
+      ? idleAnkleTarget - MathUtils.lerp(0.1, 0.24, gaitEffort)
       : -0.12;
-    const armSwing = Math.sin(gaitPhaseRef.current) * 0.18 * speedRatio;
+    const stride = Math.sin(gaitPhaseRef.current);
+    const hipBaseTarget = groundedAfterControl
+      ? MathUtils.lerp(0.02, -0.22, crouchAmount)
+      : -0.08;
+    const hipSwing = groundedAfterControl && hasMovementInput
+      ? stride * MathUtils.lerp(0.18, 0.5, gaitEffort)
+      : 0;
+    const shoulderBaseTarget = groundedAfterControl
+      ? MathUtils.lerp(0.1, 0.2, crouchAmount)
+      : 0.16;
+    const shoulderSwing = groundedAfterControl && hasMovementInput
+      ? stride * MathUtils.lerp(0.18, 0.38, gaitEffort)
+      : 0;
+    const elbowSwing = stride * 0.14 * gaitEffort;
     const elbowBaseTarget = groundedAfterControl
       ? MathUtils.lerp(-0.34, -0.48, crouchAmount)
       : -0.42;
     const wristTarget = groundedAfterControl ? 0 : -0.05;
+    const leftHipTarget = MathUtils.clamp(
+      hipBaseTarget - hipSwing - airborneAmount * 0.04,
+      -0.9,
+      0.7,
+    );
+    const rightHipTarget = MathUtils.clamp(
+      hipBaseTarget + hipSwing - airborneAmount * 0.04,
+      -0.9,
+      0.7,
+    );
+    const leftShoulderTarget = MathUtils.clamp(
+      shoulderBaseTarget + shoulderSwing,
+      -1.1,
+      0.9,
+    );
+    const rightShoulderTarget = MathUtils.clamp(
+      shoulderBaseTarget - shoulderSwing,
+      -1.1,
+      0.9,
+    );
 
     const leftKneeTarget =
       swingSide === "left"
@@ -621,6 +733,30 @@ export function MwendoActiveRagdollPlayer({
           : idleAnkleTarget;
 
     driveJointToPosition(
+      jointRefs.hipLeft.current,
+      leftHipTarget,
+      groundedAfterControl ? 20 : 11,
+      groundedAfterControl ? 4.4 : 2.8,
+    );
+    driveJointToPosition(
+      jointRefs.hipRight.current,
+      rightHipTarget,
+      groundedAfterControl ? 20 : 11,
+      groundedAfterControl ? 4.4 : 2.8,
+    );
+    driveJointToPosition(
+      jointRefs.shoulderLeft.current,
+      leftShoulderTarget,
+      8.4,
+      2.2,
+    );
+    driveJointToPosition(
+      jointRefs.shoulderRight.current,
+      rightShoulderTarget,
+      8.4,
+      2.2,
+    );
+    driveJointToPosition(
       jointRefs.kneeLeft.current,
       leftKneeTarget,
       groundedAfterControl ? 22 : 14,
@@ -646,13 +782,13 @@ export function MwendoActiveRagdollPlayer({
     );
     driveJointToPosition(
       jointRefs.elbowLeft.current,
-      elbowBaseTarget + armSwing,
+      elbowBaseTarget + elbowSwing,
       5.2,
       1.8,
     );
     driveJointToPosition(
       jointRefs.elbowRight.current,
-      elbowBaseTarget - armSwing,
+      elbowBaseTarget - elbowSwing,
       5.2,
       1.8,
     );
@@ -765,6 +901,35 @@ export function MwendoActiveRagdollPlayer({
       angularDamping: 7,
       enabledRotations: [false, true, false],
       linearDamping: 2.8,
+    },
+    head: {
+      additionalSolverIterations: 18,
+      angularDamping: 9.2,
+      linearDamping: 2.6,
+    },
+    upperArmLeft: {
+      angularDamping: 6.8,
+      linearDamping: 2.1,
+    },
+    lowerArmLeft: {
+      angularDamping: 6.6,
+      linearDamping: 1.8,
+    },
+    handLeft: {
+      angularDamping: 7.2,
+      linearDamping: 2,
+    },
+    upperArmRight: {
+      angularDamping: 6.8,
+      linearDamping: 2.1,
+    },
+    lowerArmRight: {
+      angularDamping: 6.6,
+      linearDamping: 1.8,
+    },
+    handRight: {
+      angularDamping: 7.2,
+      linearDamping: 2,
     },
     upperLegLeft: {
       angularDamping: 6.2,
