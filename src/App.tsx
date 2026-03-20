@@ -98,7 +98,10 @@ function DemoScene() {
                 controls="keyboard"
                 debug
                 inputRef={touchInputRef}
+                manualStepCount={physicsDebug.manualStepCount}
+                paused={physicsDebug.paused}
                 position={[0, 2.5, 6]}
+                timeScale={physicsDebug.timeScale}
               />
             )}
             <MwendoRagdollDummy
