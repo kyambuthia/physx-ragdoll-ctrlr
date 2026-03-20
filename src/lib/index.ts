@@ -16,7 +16,11 @@ export type {
   CharacterCtrlrStoreInit,
 } from "./CharacterCtrlrProvider";
 export type {
+  CharacterCtrlrBalanceState,
   CharacterCtrlrInputState,
+  CharacterCtrlrGaitPhase,
+  CharacterCtrlrGaitTransitionReason,
+  CharacterCtrlrLocomotionDebugState,
   CharacterCtrlrMovementMode,
   CharacterCtrlrPlayerSnapshot,
   CharacterCtrlrSupportState,
