@@ -105,6 +105,7 @@ export type CharacterCtrlrLocomotionDebugState = {
   recoveryState: CharacterCtrlrRecoveryState;
   jointCalibrationReady: boolean;
   supportState: CharacterCtrlrSupportState;
+  stanceFoot: "left" | "right" | null;
   plannedSupportSide: "left" | "right" | null;
   swingSide: "left" | "right" | null;
   grounded: boolean;
@@ -128,6 +129,7 @@ export type CharacterCtrlrLocomotionDebugState = {
   supportHeightError: number;
   centerOfMass: CharacterCtrlrVec3;
   centerOfMassVelocity: CharacterCtrlrVec3;
+  supportReference: CharacterCtrlrVec3;
   supportCenter: CharacterCtrlrVec3;
   capturePoint: CharacterCtrlrVec3;
   captureTime: number;
@@ -153,8 +155,17 @@ export type CharacterCtrlrLocomotionDebugState = {
     ankleLeft: number;
     ankleRight: number;
   };
+  legTargetRanges: {
+    hipLeft: [number, number];
+    hipRight: [number, number];
+    kneeLeft: [number, number];
+    kneeRight: [number, number];
+    ankleLeft: [number, number];
+    ankleRight: [number, number];
+  };
   footfallForwardError: number;
   footfallLateralError: number;
+  warnings: string[];
   recentTransitions: string[];
 };
 

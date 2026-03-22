@@ -76,6 +76,9 @@ import {
 } from "./active-ragdoll/gait";
 import { angleDifference, sampleRevoluteJointAngle } from "./active-ragdoll/math";
 import {
+  buildLocomotionDebugState,
+} from "./active-ragdoll/debugState";
+import {
   deriveCapturePoint,
   deriveSupportMeasurement,
   measureCenterOfMass,
@@ -86,6 +89,10 @@ import {
   blendPhasePoseTargets,
   derivePhasePoseTargets,
 } from "./active-ragdoll/poseTargets";
+import {
+  advanceRecoveryState,
+  deriveRecoverySignals,
+} from "./active-ragdoll/recovery";
 import {
   advanceStandingFootPlant,
   deriveStandingPoseTargets,
@@ -1122,102 +1129,40 @@ export function CharacterCtrlrActiveRagdollPlayer({
       Math.abs(chestEuler.z),
     );
     const supportHeight = rootPosition.y - supportCenter.y;
-    const severeInstability =
-      groundedAfterControl
-      && (
-        pelvisTilt > 1.05
-        || chestTilt > 1.18
-        || (
-          supportHeight < 0.5
-          && (pelvisTilt > 0.35 || chestTilt > 0.42)
-        )
-      );
-    const moderateInstability =
-      groundedAfterControl
-      && !severeInstability
-      && (
-        captureUrgency > 0.58
-        || pelvisTilt > 0.44
-        || chestTilt > 0.58
-        || (standingSupport && supportHeight < 0.92)
-        || Math.abs(supportLateralError) > 0.18
-        || Math.abs(supportForwardError) > 0.24
-      );
-    const recoveryReady =
-      groundedAfterControl
-      && supportStateAfterJump !== "none"
-      && supportHeight > 0.84
-      && pelvisTilt < 0.34
-      && chestTilt < 0.42
-      && Math.abs(supportLateralError) < 0.18
-      && Math.abs(supportForwardError) < 0.24
-      && Math.abs(captureForwardError) < 0.24
-      && Math.abs(captureLateralError) < 0.18;
-    const standBootstrapStable =
-      groundedAfterControl
-      && supportStateForControl === "double"
-      && supportHeight > 0.94
-      && pelvisTilt < 0.24
-      && chestTilt < 0.32
-      && Math.abs(supportLateralError) < 0.12
-      && Math.abs(supportForwardError) < 0.16
-      && Math.abs(captureForwardError) < 0.16
-      && Math.abs(captureLateralError) < 0.12;
+    const recoverySignals = deriveRecoverySignals({
+      groundedAfterControl,
+      supportState: supportStateAfterJump,
+      standingSupport,
+      supportHeight,
+      pelvisTilt,
+      chestTilt,
+      captureUrgency,
+      supportLateralError,
+      supportForwardError,
+      captureLateralError,
+      captureForwardError,
+    });
 
     if (standingAssistRequested) {
-      standBootstrapTimerRef.current = standBootstrapStable
+      standBootstrapTimerRef.current = recoverySignals.standBootstrapStable
         ? standBootstrapTimerRef.current + delta
         : 0;
     } else {
       standBootstrapTimerRef.current = 0;
     }
 
-    if (jumpTriggered || (!groundedAfterControl && predictedVelocityY > 0.35)) {
-      transitionRecoveryState(recoveryState, "jumping");
-    } else if (previousSnapshot && !previousSnapshot.grounded && groundedAfterControl) {
-      transitionRecoveryState(recoveryState, "landing");
-    } else if (recoveryState.mode === "jumping" && !groundedAfterControl) {
-      transitionRecoveryState(recoveryState, "jumping");
-    } else if (spawnSettleActive && groundedAfterControl) {
-      transitionRecoveryState(
-        recoveryState,
-        standBootstrapStable ? "stable" : "landing",
-      );
-    } else if (severeInstability) {
-      transitionRecoveryState(recoveryState, "fallen");
-    } else if (recoveryState.mode === "fallen") {
-      transitionRecoveryState(
-        recoveryState,
-        recoveryReady ? "recovering" : "fallen",
-      );
-    } else if (recoveryState.mode === "recovering") {
-      if (recoveryReady && recoveryState.elapsed > 0.42) {
-        transitionRecoveryState(recoveryState, "stable");
-      } else {
-        transitionRecoveryState(recoveryState, "recovering");
-      }
-    } else if (recoveryState.mode === "landing") {
-      transitionRecoveryState(
-        recoveryState,
-        recoveryState.elapsed < 0.2 ? "landing" : moderateInstability ? "stumbling" : "stable",
-      );
-    } else if (moderateInstability) {
-      transitionRecoveryState(recoveryState, "stumbling");
-    } else {
-      transitionRecoveryState(recoveryState, "stable");
-    }
-
-    const recoveryProgress = MathUtils.clamp(
-      recoveryState.mode === "recovering"
-        ? recoveryState.elapsed / 0.85
-        : recoveryState.mode === "landing"
-          ? recoveryState.elapsed / 0.2
-          : recoveryState.mode === "stumbling"
-            ? recoveryState.elapsed / 0.3
-            : 1,
-      0,
-      1,
-    );
+    const recoveryProgress = advanceRecoveryState({
+      recoveryState,
+      jumpTriggered,
+      groundedAfterControl,
+      predictedVelocityY,
+      previousGrounded: previousSnapshot?.grounded ?? true,
+      spawnSettleActive,
+      severeInstability: recoverySignals.severeInstability,
+      moderateInstability: recoverySignals.moderateInstability,
+      recoveryReady: recoverySignals.recoveryReady,
+      standBootstrapStable: recoverySignals.standBootstrapStable,
+    });
     phasePoseTargets = applyRecoveryPoseTargets(
       phasePoseTargets,
       recoveryState.mode,
@@ -1688,7 +1633,7 @@ export function CharacterCtrlrActiveRagdollPlayer({
         : recoveryState.mode === "jumping"
           ? "unsupported"
           : "recovering";
-    locomotionDebugRef.current = {
+    locomotionDebugRef.current = buildLocomotionDebugState({
       movementMode: nextMovementMode,
       gaitPhase: gaitState.phase,
       gaitTransitionReason: gaitState.transitionReason,
@@ -1696,6 +1641,7 @@ export function CharacterCtrlrActiveRagdollPlayer({
       recoveryState: recoveryState.mode,
       jointCalibrationReady: jointCalibrationReadyRef.current,
       supportState: supportStateAfterJump,
+      stanceFoot: plannedSupportSide,
       plannedSupportSide,
       swingSide,
       grounded: groundedAfterControl,
@@ -1733,6 +1679,7 @@ export function CharacterCtrlrActiveRagdollPlayer({
         centerOfMassVelocity.y,
         centerOfMassVelocity.z,
       ],
+      supportReference: [supportCenter.x, supportCenter.y, supportCenter.z],
       supportCenter: [supportCenter.x, supportCenter.y, supportCenter.z],
       capturePoint: [
         capturePointPosition.x,
@@ -1761,8 +1708,12 @@ export function CharacterCtrlrActiveRagdollPlayer({
       },
       footfallForwardError,
       footfallLateralError,
+      yawError,
+      captureUrgency,
       recentTransitions: transitionHistoryRef.current,
-    };
+    });
+
+    const locomotionDebugState = locomotionDebugRef.current;
 
     if (debug) {
       if (typeof window !== "undefined") {
@@ -1771,23 +1722,10 @@ export function CharacterCtrlrActiveRagdollPlayer({
             __characterCtrlrActiveRagdollDebug?: unknown;
           }
         ).__characterCtrlrActiveRagdollDebug = {
-          movementMode: nextMovementMode,
-          grounded: groundedAfterControl,
-          standingSupport,
-          supportState: supportStateAfterJump,
-          gaitPhase: gaitState.phase,
-          recoveryState: recoveryState.mode,
+          ...locomotionDebugState,
           jointCalibrationReady: jointCalibrationReadyRef.current,
           jointCalibration: jointCalibrationRef.current,
           legJointAngles: liveLegJointAngles,
-          legJointTargets: {
-            hipLeft: hipLeftTarget,
-            hipRight: hipRightTarget,
-            kneeLeft: kneeLeftTarget,
-            kneeRight: kneeRightTarget,
-            ankleLeft: ankleLeftTarget,
-            ankleRight: ankleRightTarget,
-          },
           supportErrors: {
             lateral: supportLateralError,
             forward: supportForwardError,
@@ -1816,23 +1754,10 @@ export function CharacterCtrlrActiveRagdollPlayer({
       if (debugLogCooldownRef.current <= 0) {
         debugLogCooldownRef.current = 0.4;
         console.log("[CharacterCtrlrActiveRagdollPlayer]", {
-          movementMode: nextMovementMode,
-          grounded: groundedAfterControl,
-          standingSupport,
-          supportState: supportStateAfterJump,
-          gaitPhase: gaitState.phase,
-          recoveryState: recoveryState.mode,
+          ...locomotionDebugState,
           jointCalibrationReady: jointCalibrationReadyRef.current,
           jointCalibration: jointCalibrationRef.current,
           legJointAngles: liveLegJointAngles,
-          legJointTargets: {
-            hipLeft: hipLeftTarget,
-            hipRight: hipRightTarget,
-            kneeLeft: kneeLeftTarget,
-            kneeRight: kneeRightTarget,
-            ankleLeft: ankleLeftTarget,
-            ankleRight: ankleRightTarget,
-          },
           supportErrors: {
             lateral: supportLateralError,
             forward: supportForwardError,
