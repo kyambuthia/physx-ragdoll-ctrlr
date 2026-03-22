@@ -108,6 +108,8 @@ export type CharacterCtrlrLocomotionDebugState = {
   plannedSupportSide: "left" | "right" | null;
   swingSide: "left" | "right" | null;
   grounded: boolean;
+  standingSupport: boolean;
+  turnInPlaceRequested: boolean;
   hasMovementInput: boolean;
   gaitPhaseValue: number;
   gaitPhaseElapsed: number;
@@ -119,6 +121,8 @@ export type CharacterCtrlrLocomotionDebugState = {
   horizontalSpeed: number;
   leftSupportContacts: number;
   rightSupportContacts: number;
+  leftSupportContactLifetime: number;
+  rightSupportContactLifetime: number;
   supportLateralError: number;
   supportForwardError: number;
   supportHeightError: number;

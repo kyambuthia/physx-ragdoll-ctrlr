@@ -597,7 +597,7 @@ function DebugBoard({
               maxWidth={4.2}
               position={[0, -0.72, 0]}
             >
-              {`phase ${locomotionDebugState.gaitPhaseValue.toFixed(2)}  t ${locomotionDebugState.gaitPhaseElapsed.toFixed(2)}/${locomotionDebugState.gaitPhaseDuration.toFixed(2)}  speed ${locomotionDebugState.horizontalSpeed.toFixed(2)}`}
+              {`phase ${locomotionDebugState.gaitPhaseValue.toFixed(2)}  t ${locomotionDebugState.gaitPhaseElapsed.toFixed(2)}/${locomotionDebugState.gaitPhaseDuration.toFixed(2)}  speed ${locomotionDebugState.horizontalSpeed.toFixed(2)}  stand ${locomotionDebugState.standingSupport ? "on" : "off"}  turn ${locomotionDebugState.turnInPlaceRequested ? "on" : "off"}`}
             </Text>
             <Text
               anchorX="center"
@@ -607,7 +607,7 @@ function DebugBoard({
               maxWidth={4.2}
               position={[0, -0.94, 0]}
             >
-              {`transition ${locomotionDebugState.gaitTransitionReason}  count ${locomotionDebugState.gaitTransitionCount}  contacts L${locomotionDebugState.leftSupportContacts}/R${locomotionDebugState.rightSupportContacts}`}
+              {`transition ${locomotionDebugState.gaitTransitionReason}  count ${locomotionDebugState.gaitTransitionCount}  contacts L${locomotionDebugState.leftSupportContacts}/R${locomotionDebugState.rightSupportContacts}  life ${locomotionDebugState.leftSupportContactLifetime.toFixed(2)}/${locomotionDebugState.rightSupportContactLifetime.toFixed(2)}`}
             </Text>
             <Text
               anchorX="center"

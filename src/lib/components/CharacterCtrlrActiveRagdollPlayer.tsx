@@ -79,10 +79,14 @@ import { angleDifference, sampleRevoluteJointAngle } from "./active-ragdoll/math
 import { driveJointToPosition, resolveJointTarget } from "./active-ragdoll/motors";
 import {
   applyRecoveryPoseTargets,
-  applyStandingPoseTargets,
   blendPhasePoseTargets,
   derivePhasePoseTargets,
 } from "./active-ragdoll/poseTargets";
+import {
+  advanceStandingFootPlant,
+  deriveStandingPoseTargets,
+  deriveStandingTargetFacing,
+} from "./active-ragdoll/standing";
 import type {
   ContactTrackingState,
   GaitState,
@@ -395,6 +399,7 @@ export function CharacterCtrlrActiveRagdollPlayer({
             ? "right"
             : "none";
     const contactState = contactStateRef.current;
+    const debugNow = performance.now();
     const effectiveGroundedSignal =
       contactState.rawContactsGrounded
       || (
@@ -415,17 +420,32 @@ export function CharacterCtrlrActiveRagdollPlayer({
     const currentVelocity = pelvis.linvel();
     const pelvisMass = pelvis.mass();
     const horizontalSpeed = Math.hypot(currentVelocity.x, currentVelocity.z);
+    const turnInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const pureTurnRequested =
+      turnInput !== 0
+      && !keys.forward
+      && !keys.backward
+      && !keys.jump
+      && !keys.crouch;
     const standingAssistRequested =
       grounded
       && (
         !hasMovementInput
-        || horizontalSpeed < STAND_ASSIST_MAX_SPEED
+        || pureTurnRequested
       );
     const standBootstrapActive =
       standingAssistRequested
       && standBootstrapTimerRef.current < STAND_BOOTSTRAP_SETTLE_DURATION;
     const spawnSettleActive = standBootstrapActive || !jointCalibrationReadyRef.current;
-    const locomotionCommandActive = hasMovementInput && !spawnSettleActive;
+    const turnInPlaceRequested =
+      pureTurnRequested
+      && grounded
+      && !spawnSettleActive
+      && horizontalSpeed <= STAND_ASSIST_MAX_SPEED;
+    const locomotionCommandActive =
+      hasMovementInput
+      && !spawnSettleActive
+      && !turnInPlaceRequested;
     const activeLocomotionMode = deriveActiveLocomotionMode(
       locomotionCommandActive,
       locomotionMode,
@@ -503,9 +523,16 @@ export function CharacterCtrlrActiveRagdollPlayer({
     }
 
     const supportStateAfterJump = jumpTriggered ? "none" : contactState.supportState;
-    const targetFacing = hasMovementInput
-      ? Math.atan2(movement.x, movement.z)
-      : playerFacing;
+    const movementHeading = Math.atan2(movement.x, movement.z);
+    const targetFacing = deriveStandingTargetFacing({
+      playerFacing,
+      movementHeading,
+      hasMovementInput,
+      pureTurnRequested,
+      turnInput,
+      grounded,
+      delta,
+    });
     const pelvisRotation = pelvis.rotation();
     const pelvisAngularVelocity = pelvis.angvel();
 
@@ -710,14 +737,10 @@ export function CharacterCtrlrActiveRagdollPlayer({
     const standingSupport =
       groundedAfterControl
       && (
-        standingAssistRequested
-        || gaitState.phase === "idle"
-        || gaitState.phase === "double-support"
+        !locomotionCommandActive
+        || spawnSettleActive
       );
-    const supportStateForControl =
-      standingSupport && supportStateAfterJump !== "none"
-        ? "double"
-        : supportStateAfterJump;
+    const supportStateForControl = supportStateAfterJump;
     const stepLengthTarget =
       groundedAfterControl && locomotionCommandActive
         ? MathUtils.lerp(gaitConfig.step.length[0], gaitConfig.step.length[1], gaitEffort)
@@ -871,12 +894,14 @@ export function CharacterCtrlrActiveRagdollPlayer({
         );
         const correctedLateralError = lateralError + captureLateralFeedback;
         const correctedForwardError = forwardError + captureForwardFeedback;
-        const supportCentering =
-          supportStateForControl === "double"
+        const supportCentering = standingSupport
+          ? MathUtils.lerp(2.2, 3.2, captureUrgency)
+          : supportStateForControl === "double"
             ? gaitConfig.support.centering.double
             : gaitConfig.support.centering.single;
-        const supportForwarding =
-          supportStateForControl === "double"
+        const supportForwarding = standingSupport
+          ? MathUtils.lerp(1.4, 2.2, captureUrgency)
+          : supportStateForControl === "double"
             ? MathUtils.lerp(
                 gaitConfig.support.forwarding.double[0],
                 gaitConfig.support.forwarding.double[1],
@@ -910,16 +935,20 @@ export function CharacterCtrlrActiveRagdollPlayer({
         supportLateralError = lateralError;
         supportForwardError = forwardError;
         supportHeightError = heightError;
-        const supportImpulseCeiling = MathUtils.lerp(0.62, 0.88, gaitEffort);
+        const supportImpulseCeiling = standingSupport
+          ? MathUtils.lerp(0.48, 0.68, captureUrgency)
+          : MathUtils.lerp(0.62, 0.88, gaitEffort);
         const supportImpulseY = MathUtils.clamp(
           (
-            heightError * (standingSupport ? 12.5 : 9.5)
-            - currentVelocity.y * (standingSupport ? 2.2 : 1.8)
+            heightError * (standingSupport ? 10.8 : 9.5)
+            - currentVelocity.y * (standingSupport ? 2.6 : 1.8)
           ) * supportMass * delta,
           standingSupport ? -0.22 : -0.14,
-          standingSupport ? 1.08 : supportImpulseCeiling,
+          standingSupport ? 0.84 : supportImpulseCeiling,
         );
-        const supportCorrectionBoost = MathUtils.lerp(1.0, 1.4, gaitEffort);
+        const supportCorrectionBoost = standingSupport
+          ? MathUtils.lerp(0.82, 1.08, captureUrgency)
+          : MathUtils.lerp(1.0, 1.4, gaitEffort);
         supportCorrection
           .copy(facingRight)
           .multiplyScalar(
@@ -934,7 +963,7 @@ export function CharacterCtrlrActiveRagdollPlayer({
         const heightImpulse = MathUtils.clamp(
           supportImpulseY * pelvisSupportShare,
           standingSupport ? -0.18 : -0.12,
-          standingSupport ? 0.82 : MathUtils.lerp(0.44, 0.68, gaitEffort),
+          standingSupport ? 0.62 : MathUtils.lerp(0.44, 0.68, gaitEffort),
         );
         pelvis.applyImpulse(
           {
@@ -1049,26 +1078,17 @@ export function CharacterCtrlrActiveRagdollPlayer({
             ? leftFootPosition.y - FOOT_SUPPORT_OFFSET
             : rightFootPosition.y - FOOT_SUPPORT_OFFSET;
 
-      if (!standingFootPlantRef.current) {
-        standingFootPlantRef.current = {
-          left: [
-            leftFootPosition.x,
-            supportPlaneY + FOOT_SUPPORT_OFFSET,
-            leftFootPosition.z,
-          ],
-          right: [
-            rightFootPosition.x,
-            supportPlaneY + FOOT_SUPPORT_OFFSET,
-            rightFootPosition.z,
-          ],
-        };
-      }
+      standingFootPlantRef.current = advanceStandingFootPlant({
+        currentPlant: standingFootPlantRef.current,
+        supportCenter: [supportCenter.x, supportCenter.y, supportCenter.z],
+        supportPlaneY,
+        facing,
+        delta,
+        turnInPlaceRequested,
+      });
 
       const standingFootPlant = standingFootPlantRef.current;
       if (standingFootPlant) {
-        standingFootPlant.left[1] = supportPlaneY + FOOT_SUPPORT_OFFSET;
-        standingFootPlant.right[1] = supportPlaneY + FOOT_SUPPORT_OFFSET;
-
         const applyStandingFootPlant = (
           foot: typeof leftFoot,
           target: CharacterCtrlrVec3,
@@ -1082,19 +1102,19 @@ export function CharacterCtrlrActiveRagdollPlayer({
           standFootTarget.set(target[0], target[1], target[2]);
           standFootImpulse.set(
             MathUtils.clamp(
-              (standFootTarget.x - footPosition.x) * 28 - footVelocity.x * 6.8,
-              -2.6,
-              2.6,
+              (standFootTarget.x - footPosition.x) * 20 - footVelocity.x * 5.4,
+              -1.8,
+              1.8,
             ) * footMass * delta,
             MathUtils.clamp(
-              Math.max(0, standFootTarget.y - footPosition.y) * 18 - footVelocity.y * 3.4,
-              -0.24,
-              1.3,
+              Math.max(0, standFootTarget.y - footPosition.y) * 15 - footVelocity.y * 3.8,
+              -0.18,
+              0.92,
             ) * footMass * delta,
             MathUtils.clamp(
-              (standFootTarget.z - footPosition.z) * 28 - footVelocity.z * 6.8,
-              -2.6,
-              2.6,
+              (standFootTarget.z - footPosition.z) * 20 - footVelocity.z * 5.4,
+              -1.8,
+              1.8,
             ) * footMass * delta,
           );
           foot.applyImpulse(
@@ -1303,7 +1323,15 @@ export function CharacterCtrlrActiveRagdollPlayer({
       recoveryProgress,
     );
     if (standingSupport) {
-      phasePoseTargets = applyStandingPoseTargets(phasePoseTargets);
+      phasePoseTargets = deriveStandingPoseTargets({
+        baseTargets: phasePoseTargets,
+        supportLateralError,
+        supportForwardError,
+        captureLateralError,
+        captureForwardError,
+        yawError,
+        turnInPlaceRequested,
+      });
     }
     if (MIXAMO_CONTROL_ENABLED && mixamoSource && mixamoPoseRef.current && !spawnSettleActive) {
       phasePoseTargets = blendPhasePoseTargets(
@@ -1643,14 +1671,14 @@ export function CharacterCtrlrActiveRagdollPlayer({
     driveJointToPosition(
       jointRefs.shoulderLeft.current,
       shoulderLeftTarget,
-      8.4,
-      2.2,
+      standingSupport ? 9.2 : 8.4,
+      standingSupport ? 2.8 : 2.2,
     );
     driveJointToPosition(
       jointRefs.shoulderRight.current,
       shoulderRightTarget,
-      8.4,
-      2.2,
+      standingSupport ? 9.2 : 8.4,
+      standingSupport ? 2.8 : 2.2,
     );
     driveJointToPosition(
       jointRefs.kneeLeft.current,
@@ -1679,14 +1707,14 @@ export function CharacterCtrlrActiveRagdollPlayer({
     driveJointToPosition(
       jointRefs.elbowLeft.current,
       elbowLeftTarget,
-      5.2,
-      1.8,
+      standingSupport ? 5.8 : 5.2,
+      standingSupport ? 2.2 : 1.8,
     );
     driveJointToPosition(
       jointRefs.elbowRight.current,
       elbowRightTarget,
-      5.2,
-      1.8,
+      standingSupport ? 5.8 : 5.2,
+      standingSupport ? 2.2 : 1.8,
     );
     driveJointToPosition(
       jointRefs.wristLeft.current,
@@ -1792,6 +1820,8 @@ export function CharacterCtrlrActiveRagdollPlayer({
       plannedSupportSide,
       swingSide,
       grounded: groundedAfterControl,
+      standingSupport,
+      turnInPlaceRequested,
       hasMovementInput,
       gaitPhaseValue,
       gaitPhaseElapsed: gaitState.phaseElapsed,
@@ -1803,6 +1833,14 @@ export function CharacterCtrlrActiveRagdollPlayer({
       horizontalSpeed,
       leftSupportContacts: contactState.leftSupportContacts.size,
       rightSupportContacts: contactState.rightSupportContacts.size,
+      leftSupportContactLifetime:
+        contactState.leftSupportContacts.size > 0
+          ? Math.max(0, (debugNow - contactState.contactTimestamps.left) / 1000)
+          : 0,
+      rightSupportContactLifetime:
+        contactState.rightSupportContacts.size > 0
+          ? Math.max(0, (debugNow - contactState.contactTimestamps.right) / 1000)
+          : 0,
       supportLateralError,
       supportForwardError,
       supportHeightError,
