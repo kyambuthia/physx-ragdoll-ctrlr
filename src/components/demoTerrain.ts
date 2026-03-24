@@ -228,12 +228,12 @@ export function sampleDemoPlanetSurfaceAtPosition(position: Vector3 | [number, n
   return sampleDemoPlanetSurface(dir);
 }
 
-export function writeDemoPlanetColor(
+export function writeDemoPlanetColorFromHeight(
   direction: Vector3,
+  height: number,
   surfaceSlope: number,
   out = new Color(),
 ) {
-  const height = sampleDemoPlanetHeight(direction);
   const height01 = smoothstep(-1.2, 3.2, height);
   const rock01 = smoothstep(0.08, 0.34, surfaceSlope);
   const polar01 = smoothstep(0.68, 0.94, Math.abs(direction.y));
@@ -252,6 +252,15 @@ export function writeDemoPlanetColor(
   out.lerp(shadeColor, surfaceSlope * 0.18);
 
   return out;
+}
+
+export function writeDemoPlanetColor(
+  direction: Vector3,
+  surfaceSlope: number,
+  out = new Color(),
+) {
+  const height = sampleDemoPlanetHeight(direction);
+  return writeDemoPlanetColorFromHeight(direction, height, surfaceSlope, out);
 }
 
 export function sampleDemoPlanetNormal(
@@ -363,9 +372,12 @@ export function createDemoPlanetGeometry() {
   const colors = new Float32Array((positions.length / 3) * 3);
 
   for (let index = 0; index < positions.length; index += 3) {
-    normalizedDirection
-      .set(positions[index] ?? 0, positions[index + 1] ?? 0, positions[index + 2] ?? 0)
-      .normalize();
+    const px = positions[index] ?? 0;
+    const py = positions[index + 1] ?? 0;
+    const pz = positions[index + 2] ?? 0;
+    normalizedDirection.set(px, py, pz).normalize();
+    const radius = Math.sqrt(px * px + py * py + pz * pz);
+    const height = radius - DEMO_PLANET_RADIUS;
     const slope = 1 - Math.max(
       0,
       normals[index] * normalizedDirection.x +
@@ -373,7 +385,7 @@ export function createDemoPlanetGeometry() {
         normals[index + 2] * normalizedDirection.z,
     );
 
-    writeDemoPlanetColor(normalizedDirection, slope, surfaceColor);
+    writeDemoPlanetColorFromHeight(normalizedDirection, height, slope, surfaceColor);
 
     colors[index] = surfaceColor.r;
     colors[index + 1] = surfaceColor.g;
