@@ -12,9 +12,9 @@ import {
 } from "./demoTerrain";
 
 const TILE_SIZE = 8;
-const TILE_OVERLAP = 0.45;
+const TILE_OVERLAP = 0.48;
 const TILE_SEGMENTS = 28;
-const TILE_GRID_RADIUS = 1;
+const TILE_GRID_RADIUS = 2;
 const TILE_SURFACE_OFFSET = 0.012;
 
 const tileDirection = new Vector3();
@@ -83,7 +83,7 @@ function writeTileGeometry(
   const halfSize = fullSize * 0.5;
 
   for (let row = 0; row <= TILE_SEGMENTS; row += 1) {
-    const z = (row / TILE_SEGMENTS) * fullSize - halfSize;
+    const z = halfSize - (row / TILE_SEGMENTS) * fullSize;
 
     for (let column = 0; column <= TILE_SEGMENTS; column += 1) {
       const x = (column / TILE_SEGMENTS) * fullSize - halfSize;
@@ -103,17 +103,35 @@ function writeTileGeometry(
       positions[offset] = point.x;
       positions[offset + 1] = point.y;
       positions[offset + 2] = point.z;
+    }
+  }
 
-      writeDemoPlanetColor(tileSurfaceNormal, 0.055, tileColor);
+  positionAttribute.needsUpdate = true;
+  geometry.computeVertexNormals();
+
+  const normalAttribute = geometry.getAttribute("normal") as BufferAttribute;
+  const normals = normalAttribute.array as Float32Array;
+
+  for (let row = 0; row <= TILE_SEGMENTS; row += 1) {
+    for (let column = 0; column <= TILE_SEGMENTS; column += 1) {
+      const index = row * stride + column;
+      const offset = index * 3;
+
+      tileDirection.set(positions[offset], positions[offset + 1], positions[offset + 2]).normalize();
+      
+      const nx = normals[offset];
+      const ny = normals[offset + 1];
+      const nz = normals[offset + 2];
+      const slope = 1 - Math.max(0, nx * tileDirection.x + ny * tileDirection.y + nz * tileDirection.z);
+
+      writeDemoPlanetColor(tileDirection, slope, tileColor);
       colors[offset] = tileColor.r;
       colors[offset + 1] = tileColor.g;
       colors[offset + 2] = tileColor.b;
     }
   }
 
-  positionAttribute.needsUpdate = true;
   colorAttribute.needsUpdate = true;
-  geometry.computeVertexNormals();
 }
 
 export function DemoPlanetDetailPatch(props: {
@@ -174,9 +192,7 @@ export function DemoPlanetDetailPatch(props: {
       tileCenterPosition
         .copy(snappedTileAnchor)
         .addScaledVector(playerTangent, tile.offsetX * TILE_SIZE)
-        .addScaledVector(playerBitangent, tile.offsetY * TILE_SIZE)
-        .normalize()
-        .multiplyScalar(props.positionRef.current.length());
+        .addScaledVector(playerBitangent, tile.offsetY * TILE_SIZE);
 
       writeTileGeometry(
         tile.geometry,
@@ -194,9 +210,11 @@ export function DemoPlanetDetailPatch(props: {
           key={tile.key}
           geometry={tile.geometry}
           frustumCulled={false}
+          castShadow
+          receiveShadow
         >
           <meshStandardMaterial
-            color="#738366"
+            color="#ffffff"
             vertexColors
             metalness={0.02}
             roughness={0.96}
