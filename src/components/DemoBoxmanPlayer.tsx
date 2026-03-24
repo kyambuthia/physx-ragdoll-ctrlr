@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Group, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
 import { BoxmanHero } from "../lib/components/BoxmanHero";
-import { useCharacterCtrlrStore } from "../lib/CharacterCtrlrProvider";
+import { useCharacterCtrlrStoreApi } from "../lib/CharacterCtrlrProvider";
 import { useCharacterCtrlrKeyboardInput } from "../lib/useCharacterCtrlrKeyboardInput";
 import {
   DEFAULT_CHARACTER_CTRLR_INPUT,
@@ -45,6 +45,7 @@ const basisMatrix = new Matrix4();
 const JUMP_VELOCITY = 6.8;
 const GRAVITY = 18;
 const PLAYER_COLLISION_RADIUS = 0.55;
+const SNAPSHOT_PUBLISH_INTERVAL = 1 / 12;
 const obstacleOffset = new Vector3();
 
 function projectDirectionOnPlane(source: Vector3, planeNormal: Vector3, fallback: Vector3) {
@@ -67,7 +68,7 @@ export function DemoBoxmanPlayer(props: {
   upRef: MutableRefObject<Vector3>;
   viewVectorRef: MutableRefObject<Vector3>;
 }) {
-  const setPlayerSnapshot = useCharacterCtrlrStore((state) => state.setPlayerSnapshot);
+  const storeApi = useCharacterCtrlrStoreApi();
   const keyboardInputRef = useCharacterCtrlrKeyboardInput(true);
   const obstacles = useMemo(() => getDemoPlanetObstacles(), []);
   const groupRef = useRef<Group>(null);
@@ -86,6 +87,10 @@ export function DemoBoxmanPlayer(props: {
   const jumpHeldRef = useRef(false);
   const facingDirectionRef = useRef(new Vector3(0, 0, 1));
   const initialPositionRef = useRef(props.position ?? [0, 2, 18]);
+  const snapshotTimerRef = useRef(0);
+  const lastPublishedMovementModeRef =
+    useRef<CharacterCtrlrMovementMode>("idle");
+  const lastPublishedGroundedRef = useRef(false);
   const [movementMode, setMovementMode] = useState<CharacterCtrlrMovementMode>("idle");
 
   useEffect(() => {
@@ -114,8 +119,8 @@ export function DemoBoxmanPlayer(props: {
       velocity: [0, 0, 0],
     };
 
-    setPlayerSnapshot(initialSnapshot);
-  }, [props.positionRef, props.upRef, setPlayerSnapshot]);
+    storeApi.getState().setPlayerSnapshot(initialSnapshot);
+  }, [props.positionRef, props.upRef, storeApi]);
 
   useFrame((_, dt) => {
     const delta = Math.min(dt, 1 / 20);
@@ -274,17 +279,29 @@ export function DemoBoxmanPlayer(props: {
     const planarForward = projectDirectionOnPlane(facingForward, up, tangentForward);
     const facingAngle = Math.atan2(planarForward.x, planarForward.z);
     const focusPosition = position.clone().addScaledVector(up, 1.15);
-    const snapshot: CharacterCtrlrPlayerSnapshot = {
-      position: [position.x, position.y, position.z],
-      focusPosition: [focusPosition.x, focusPosition.y, focusPosition.z],
-      facing: Number.isFinite(facingAngle) ? facingAngle : 0,
-      movementMode: nextMovementMode,
-      grounded: groundedRef.current,
-      supportState: groundedRef.current ? "double" : "none",
-      velocity: [velocity.x, velocity.y, velocity.z],
-    };
+    snapshotTimerRef.current += delta;
+    const shouldPublishSnapshot =
+      snapshotTimerRef.current >= SNAPSHOT_PUBLISH_INTERVAL ||
+      nextMovementMode !== lastPublishedMovementModeRef.current ||
+      groundedRef.current !== lastPublishedGroundedRef.current;
 
-    setPlayerSnapshot(snapshot);
+    if (shouldPublishSnapshot) {
+      snapshotTimerRef.current = 0;
+      lastPublishedMovementModeRef.current = nextMovementMode;
+      lastPublishedGroundedRef.current = groundedRef.current;
+
+      const snapshot: CharacterCtrlrPlayerSnapshot = {
+        position: [position.x, position.y, position.z],
+        focusPosition: [focusPosition.x, focusPosition.y, focusPosition.z],
+        facing: Number.isFinite(facingAngle) ? facingAngle : 0,
+        movementMode: nextMovementMode,
+        grounded: groundedRef.current,
+        supportState: groundedRef.current ? "double" : "none",
+        velocity: [velocity.x, velocity.y, velocity.z],
+      };
+
+      storeApi.getState().setPlayerSnapshot(snapshot);
+    }
   });
 
   return (
