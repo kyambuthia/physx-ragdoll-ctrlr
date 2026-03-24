@@ -132,7 +132,7 @@ export function DemoBoxmanPlayer(props: {
         facingDirectionRef.current,
       ),
     );
-    tangentRight.crossVectors(up, tangentForward).normalize();
+    tangentRight.crossVectors(tangentForward, up).normalize();
     movement.set(0, 0, 0);
 
     if (mergedInput.forward) movement.add(tangentForward);
