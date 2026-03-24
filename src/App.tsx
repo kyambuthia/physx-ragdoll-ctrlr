@@ -8,6 +8,7 @@ import { Lights } from "./components/Lights";
 import { DemoBoxmanPlayer } from "./components/DemoBoxmanPlayer";
 import { DemoPlanetBackdrop } from "./components/DemoPlanetBackdrop";
 import { DemoPlanetCamera } from "./components/DemoPlanetCamera";
+import { DemoPlanetDetailPatch } from "./components/DemoPlanetDetailPatch";
 import { TerrainArena } from "./components/TerrainArena";
 import {
   DEMO_PLANET_DUMMY_DIRECTION,
@@ -146,6 +147,10 @@ function DemoScene() {
             <>
               <DemoPlanetBackdrop />
               <TerrainArena />
+              <DemoPlanetDetailPatch
+                positionRef={playerPositionRef}
+                upRef={playerUpRef}
+              />
               <DemoBoxmanPlayer
                 inputRef={activeInputRef}
                 position={DEMO_PLAYER_POSITION}

@@ -2,6 +2,8 @@ import {
   Color,
   Float32BufferAttribute,
   IcosahedronGeometry,
+  Matrix4,
+  Quaternion,
   Vector3,
 } from "three";
 
@@ -22,6 +24,40 @@ export const DEMO_PLANET_DUMMY_DIRECTION: [number, number, number] = [
   0.26,
   0.868,
 ];
+export const DEMO_PLANET_OBSTACLE_DEFS = [
+  {
+    direction: [0.35, 0.18, 0.92] as [number, number, number],
+    radius: 1.2,
+    height: 2.4,
+    color: "#6f655c",
+    shape: "boulder" as const,
+    twist: 0.3,
+  },
+  {
+    direction: [0.08, 0.29, 0.954] as [number, number, number],
+    radius: 0.95,
+    height: 3.6,
+    color: "#807768",
+    shape: "column" as const,
+    twist: -0.55,
+  },
+  {
+    direction: [-0.18, 0.12, 0.976] as [number, number, number],
+    radius: 1.35,
+    height: 2.8,
+    color: "#5d564f",
+    shape: "boulder" as const,
+    twist: 0.72,
+  },
+  {
+    direction: [0.31, -0.09, 0.946] as [number, number, number],
+    radius: 0.9,
+    height: 4.1,
+    color: "#8a7f72",
+    shape: "column" as const,
+    twist: -0.18,
+  },
+];
 
 const normalizedDirection = new Vector3();
 const tangentA = new Vector3();
@@ -38,6 +74,13 @@ const rockColor = new Color();
 const shadeColor = new Color();
 const spawnDirectionVector = new Vector3(...DEMO_PLANET_SPAWN_DIRECTION).normalize();
 const dummyDirectionVector = new Vector3(...DEMO_PLANET_DUMMY_DIRECTION).normalize();
+const basisUp = new Vector3();
+const basisTangent = new Vector3();
+const basisBitangent = new Vector3();
+const basisTwistedTangent = new Vector3();
+const basisTwistedBitangent = new Vector3();
+const basisMatrix = new Matrix4();
+const polarColor = new Color();
 
 function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
@@ -185,6 +228,32 @@ export function sampleDemoPlanetSurfaceAtPosition(position: Vector3 | [number, n
   return sampleDemoPlanetSurface(dir);
 }
 
+export function writeDemoPlanetColor(
+  direction: Vector3,
+  surfaceSlope: number,
+  out = new Color(),
+) {
+  const height = sampleDemoPlanetHeight(direction);
+  const height01 = smoothstep(-1.2, 3.2, height);
+  const rock01 = smoothstep(0.08, 0.34, surfaceSlope);
+  const polar01 = smoothstep(0.68, 0.94, Math.abs(direction.y));
+
+  lowColor.setRGB(0.23, 0.36, 0.21);
+  midColor.setRGB(0.52, 0.58, 0.33);
+  highColor.setRGB(0.74, 0.7, 0.62);
+  rockColor.setRGB(0.44, 0.42, 0.41);
+  shadeColor.setRGB(0.18, 0.2, 0.18);
+  polarColor.setRGB(0.86, 0.87, 0.9);
+
+  out.copy(lowColor).lerp(midColor, height01 * 0.72);
+  out.lerp(highColor, Math.max(0, height01 - 0.35) * 0.75);
+  out.lerp(rockColor, rock01 * 0.85);
+  out.lerp(polarColor, polar01 * 0.45);
+  out.lerp(shadeColor, surfaceSlope * 0.18);
+
+  return out;
+}
+
 export function sampleDemoPlanetNormal(
   direction: Vector3 | [number, number, number],
   sampleOffset = 0.012,
@@ -232,6 +301,45 @@ export function getDemoPlanetSpawnPosition(
   return [point.x, point.y, point.z];
 }
 
+export function createSurfaceFrameQuaternion(
+  normal: Vector3,
+  twist = 0,
+) {
+  basisUp.copy(normal).normalize();
+  basisTangent.set(-basisUp.z, 0, basisUp.x);
+  if (basisTangent.lengthSq() < 1e-6) {
+    basisTangent.set(1, 0, 0);
+  }
+  basisTangent.normalize();
+  basisBitangent.crossVectors(basisUp, basisTangent).normalize();
+  basisTwistedTangent
+    .copy(basisTangent)
+    .multiplyScalar(Math.cos(twist))
+    .addScaledVector(basisBitangent, Math.sin(twist))
+    .normalize();
+  basisTwistedBitangent.crossVectors(basisUp, basisTwistedTangent).normalize();
+
+  basisMatrix.makeBasis(basisTwistedTangent, basisUp, basisTwistedBitangent);
+  return new Quaternion().setFromRotationMatrix(basisMatrix);
+}
+
+export function getDemoPlanetObstacles() {
+  return DEMO_PLANET_OBSTACLE_DEFS.map((definition) => {
+    const surface = sampleDemoPlanetSurface(definition.direction);
+    const center = surface.point
+      .clone()
+      .addScaledVector(surface.normal, definition.height * 0.45);
+
+    return {
+      ...definition,
+      base: surface.point,
+      center,
+      normal: surface.normal,
+      quaternion: createSurfaceFrameQuaternion(surface.normal, definition.twist),
+    };
+  });
+}
+
 export function createDemoPlanetGeometry() {
   const geometry = new IcosahedronGeometry(DEMO_PLANET_RADIUS, DEMO_PLANET_DETAIL);
   const positionAttribute = geometry.getAttribute("position");
@@ -258,23 +366,14 @@ export function createDemoPlanetGeometry() {
     normalizedDirection
       .set(positions[index] ?? 0, positions[index + 1] ?? 0, positions[index + 2] ?? 0)
       .normalize();
-    const height = sampleDemoPlanetHeight(normalizedDirection);
-    const slope = 1 - Math.max(0, normals[index] * normalizedDirection.x + normals[index + 1] * normalizedDirection.y + normals[index + 2] * normalizedDirection.z);
-    const height01 = smoothstep(-1.2, 3.2, height);
-    const rock01 = smoothstep(0.08, 0.34, slope);
-    const polar01 = smoothstep(0.68, 0.94, Math.abs(normalizedDirection.y));
+    const slope = 1 - Math.max(
+      0,
+      normals[index] * normalizedDirection.x +
+        normals[index + 1] * normalizedDirection.y +
+        normals[index + 2] * normalizedDirection.z,
+    );
 
-    lowColor.setRGB(0.23, 0.36, 0.21);
-    midColor.setRGB(0.52, 0.58, 0.33);
-    highColor.setRGB(0.74, 0.7, 0.62);
-    rockColor.setRGB(0.44, 0.42, 0.41);
-    shadeColor.setRGB(0.18, 0.2, 0.18);
-
-    surfaceColor.copy(lowColor).lerp(midColor, height01 * 0.72);
-    surfaceColor.lerp(highColor, Math.max(0, height01 - 0.35) * 0.75);
-    surfaceColor.lerp(rockColor, rock01 * 0.85);
-    surfaceColor.lerp(new Color(0.86, 0.87, 0.9), polar01 * 0.45);
-    surfaceColor.lerp(shadeColor, slope * 0.18);
+    writeDemoPlanetColor(normalizedDirection, slope, surfaceColor);
 
     colors[index] = surfaceColor.r;
     colors[index + 1] = surfaceColor.g;

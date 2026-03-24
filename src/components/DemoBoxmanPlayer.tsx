@@ -1,6 +1,7 @@
 import { useFrame } from "@react-three/fiber";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MutableRefObject,
@@ -19,6 +20,7 @@ import {
   type CharacterCtrlrVec3,
 } from "../lib/types";
 import {
+  getDemoPlanetObstacles,
   DEMO_PLANET_PLAYER_RIDE_HEIGHT,
   sampleDemoPlanetSurfaceAtPosition,
 } from "./demoTerrain";
@@ -42,6 +44,8 @@ const basisMatrix = new Matrix4();
 
 const JUMP_VELOCITY = 6.8;
 const GRAVITY = 18;
+const PLAYER_COLLISION_RADIUS = 0.55;
+const obstacleOffset = new Vector3();
 
 function projectDirectionOnPlane(source: Vector3, planeNormal: Vector3, fallback: Vector3) {
   const projected = source.clone().addScaledVector(
@@ -65,6 +69,7 @@ export function DemoBoxmanPlayer(props: {
 }) {
   const setPlayerSnapshot = useCharacterCtrlrStore((state) => state.setPlayerSnapshot);
   const keyboardInputRef = useCharacterCtrlrKeyboardInput(true);
+  const obstacles = useMemo(() => getDemoPlanetObstacles(), []);
   const groupRef = useRef<Group>(null);
   const pelvisRef = useRef<Group>(null);
   const spineRef = useRef<Group>(null);
@@ -190,6 +195,33 @@ export function DemoBoxmanPlayer(props: {
       groundedRef.current = true;
     } else if (radialDistance > surfaceRadius + 0.18) {
       groundedRef.current = false;
+    }
+
+    for (const obstacle of obstacles) {
+      obstacleOffset.copy(position).sub(obstacle.center);
+      const minimumDistance = obstacle.radius + PLAYER_COLLISION_RADIUS;
+      const distance = obstacleOffset.length();
+
+      if (distance >= minimumDistance) {
+        continue;
+      }
+
+      if (distance < 1e-5) {
+        obstacleOffset.copy(up);
+      } else {
+        obstacleOffset.divideScalar(distance);
+      }
+
+      position.addScaledVector(obstacleOffset, minimumDistance - distance);
+    }
+
+    const correctedSurface = sampleDemoPlanetSurfaceAtPosition(position);
+    const correctedSurfaceRadius =
+      correctedSurface.radius + DEMO_PLANET_PLAYER_RIDE_HEIGHT;
+    if (position.length() < correctedSurfaceRadius) {
+      position.copy(correctedSurface.normal).multiplyScalar(correctedSurfaceRadius);
+      groundedRef.current = true;
+      radialSpeed = Math.max(0, radialSpeed);
     }
 
     up.copy(position).normalize();

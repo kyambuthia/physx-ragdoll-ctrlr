@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEMO_PLANET_PLAYER_SPAWN_CLEARANCE,
   DEMO_PLANET_RADIUS,
+  getDemoPlanetObstacles,
   DEMO_PLANET_SPAWN_DIRECTION,
   getDemoPlanetSpawnPosition,
   sampleDemoPlanetHeight,
@@ -44,5 +45,16 @@ describe("demo planet helpers", () => {
       DEMO_PLANET_PLAYER_SPAWN_CLEARANCE,
       6,
     );
+  });
+
+  it("builds obstacle instances above the surface", () => {
+    const obstacles = getDemoPlanetObstacles();
+
+    expect(obstacles.length).toBeGreaterThan(0);
+    for (const obstacle of obstacles) {
+      expect(obstacle.center.length()).toBeGreaterThan(obstacle.base.length());
+      expect(obstacle.radius).toBeGreaterThan(0);
+      expect(obstacle.height).toBeGreaterThan(0);
+    }
   });
 });

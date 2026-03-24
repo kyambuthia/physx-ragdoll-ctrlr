@@ -5,6 +5,7 @@ import {
   DEMO_PLANET_RADIUS,
   DEMO_PLANET_PLAYER_RIDE_HEIGHT,
   DEMO_PLANET_SPAWN_DIRECTION,
+  getDemoPlanetObstacles,
   sampleDemoPlanetSurface,
 } from "./demoTerrain";
 
@@ -12,6 +13,7 @@ const spawnDirection = new Vector3(...DEMO_PLANET_SPAWN_DIRECTION).normalize();
 
 export function TerrainArena() {
   const planet = useMemo(() => createDemoPlanetGeometry(), []);
+  const obstacles = useMemo(() => getDemoPlanetObstacles(), []);
   const spawnSurface = useMemo(
     () => sampleDemoPlanetSurface(spawnDirection),
     [],
@@ -93,6 +95,51 @@ export function TerrainArena() {
           <meshBasicMaterial color="#d8ebba" transparent opacity={0.34} />
         </mesh>
       </group>
+
+      {obstacles.map((obstacle, index) => (
+        <group
+          key={`${obstacle.shape}-${index}`}
+          position={obstacle.base}
+          quaternion={obstacle.quaternion}
+        >
+          {obstacle.shape === "column" ? (
+            <>
+              <mesh castShadow receiveShadow position={[0, obstacle.height * 0.46, 0]}>
+                <cylinderGeometry
+                  args={[
+                    obstacle.radius * 0.72,
+                    obstacle.radius,
+                    obstacle.height,
+                    8,
+                  ]}
+                />
+                <meshStandardMaterial
+                  color={obstacle.color}
+                  metalness={0.03}
+                  roughness={0.94}
+                />
+              </mesh>
+              <mesh castShadow receiveShadow position={[0, obstacle.height * 0.98, 0]}>
+                <dodecahedronGeometry args={[obstacle.radius * 0.48, 0]} />
+                <meshStandardMaterial
+                  color="#a9a08f"
+                  metalness={0.02}
+                  roughness={0.9}
+                />
+              </mesh>
+            </>
+          ) : (
+            <mesh castShadow receiveShadow position={[0, obstacle.height * 0.5, 0]}>
+              <dodecahedronGeometry args={[obstacle.radius, 0]} />
+              <meshStandardMaterial
+                color={obstacle.color}
+                metalness={0.02}
+                roughness={0.96}
+              />
+            </mesh>
+          )}
+        </group>
+      ))}
     </>
   );
 }
