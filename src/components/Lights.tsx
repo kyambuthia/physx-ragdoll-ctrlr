@@ -15,6 +15,8 @@ export function Lights(props: {
           position={[54, 26, 34]}
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
+          shadow-bias={-0.0001}
+          shadow-normalBias={0.05}
           shadow-camera-near={1}
           shadow-camera-far={120}
           shadow-camera-left={-45}
